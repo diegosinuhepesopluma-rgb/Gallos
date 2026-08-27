@@ -1,16 +1,17 @@
-name: Compilar y generar JAR
+name: Compilar Gallo Giro
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
@@ -20,168 +21,170 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Mostrar archivos
-        shell: bash
+      - name: Buscar ZIP
         run: |
-          echo "=============================="
-          echo "ARCHIVOS DEL REPOSITORIO"
-          echo "=============================="
-          find . -maxdepth 3 -type f -print
+          echo "Buscando ZIP..."
+          ZIP=$(python3 -c "import glob; x=glob.glob('*.zip'); print(x[0] if x else '')")
 
-      - name: Encontrar ZIP del mod
-        shell: bash
-        run: |
-          set -e
-
-          ZIP_FILE=""
-
-          while IFS= read -r file; do
-            case "$file" in
-              *.zip)
-                ZIP_FILE="$file"
-                break
-                ;;
-            esac
-          done < <(find . -type f -name "*.zip" -not -path "./.git/*")
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No se encontró ningún ZIP."
+          if [ -z "$ZIP" ]; then
+            echo "ERROR: No hay ningún archivo ZIP."
             exit 1
           fi
 
-          echo "ZIP encontrado: $ZIP_FILE"
-          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
+          echo "ZIP encontrado: $ZIP"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
 
       - name: Descomprimir proyecto
-        shell: bash
         run: |
-          set -e
+          echo "Descomprimiendo proyecto..."
 
-          echo "=============================="
-          echo "DESCOMPRIMIENDO GALLO GIRO"
-          echo "=============================="
+          rm -rf proyecto
+          mkdir proyecto
 
-          rm -rf proyecto_neoforge
-          mkdir -p proyecto_neoforge
+          unzip -q "$ZIP" -d proyecto
 
-          unzip -q "$ZIP_FILE" -d proyecto_neoforge
+          echo "Proyecto descomprimido correctamente."
 
-          echo "Contenido descomprimido:"
-          find proyecto_neoforge -maxdepth 5 -type f -print
-
-      - name: Encontrar proyecto NeoForge
-        shell: bash
+      - name: Encontrar build.gradle
         run: |
-          set -e
+          python3 <<'PY'
+          import os
 
+          encontrados = []
+
+          for raiz, carpetas, archivos in os.walk("proyecto"):
+              if ".git" in raiz:
+                  continue
+
+              for archivo in archivos:
+                  if archivo == "build.gradle" or archivo == "build.gradle.kts":
+                      encontrados.append(os.path.join(raiz, archivo))
+
+          if not encontrados:
+              print("ERROR: No se encontró build.gradle.")
+              print("")
+              print("Archivos del proyecto:")
+              for raiz, carpetas, archivos in os.walk("proyecto"):
+                  for archivo in archivos:
+                      print(os.path.join(raiz, archivo))
+              raise SystemExit(1)
+
+          build = encontrados[0]
+          carpeta = os.path.dirname(build)
+
+          if carpeta == "":
+              carpeta = "."
+
+          print("build.gradle encontrado:")
+          print(build)
+
+          print("Carpeta del proyecto:")
+          print(carpeta)
+
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write("PROJECT_DIR=" + carpeta + "\n")
+          PY
+
+      - name: Comprobar proyecto
+        run: |
           echo "=============================="
-          echo "BUSCANDO build.gradle"
+          echo "PROYECTO GALLO GIRO"
           echo "=============================="
 
-          BUILD_FILE=""
-
-          while IFS= read -r file; do
-            BUILD_FILE="$file"
-            break
-          done < <(
-            find proyecto_neoforge \
-              -type f \
-              \( -name "build.gradle" -o -name "build.gradle.kts" \) \
-              -not -path "*/.gradle/*"
-          )
-
-          if [ -z "$BUILD_FILE" ]; then
-            echo "ERROR: No se encontró build.gradle dentro del ZIP."
-            echo ""
-            echo "Archivos encontrados:"
-            find proyecto_neoforge -type f -print
-            exit 1
-          fi
-
-          PROJECT_DIR="$(dirname "$BUILD_FILE")"
-
-          echo "Proyecto NeoForge encontrado en:"
+          echo "Carpeta:"
           echo "$PROJECT_DIR"
 
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo ""
+          echo "Contenido:"
+          ls -la "$PROJECT_DIR"
+
+          echo ""
+          echo "Buscando Gradle Wrapper..."
+
+          if [ -f "$PROJECT_DIR/gradlew" ]; then
+            echo "Gradle Wrapper encontrado."
+          else
+            echo "No hay Gradle Wrapper."
+          fi
 
       - name: Preparar Gradle
-        shell: bash
         run: |
-          set -e
+          if [ -f "$PROJECT_DIR/gradlew" ]; then
 
-          cd "$PROJECT_DIR"
+            echo "Usando Gradle Wrapper..."
 
-          echo "=============================="
-          echo "PREPARANDO GRADLE"
-          echo "=============================="
+            chmod +x "$PROJECT_DIR/gradlew"
 
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            echo "Se encontró Gradle Wrapper."
-            ./gradlew --version
           else
-            echo "No hay gradlew."
-            echo "Instalando Gradle 8.10..."
+
+            echo "No existe gradlew."
+            echo "Instalando Gradle..."
+
             sudo apt-get update
             sudo apt-get install -y gradle
-            gradle --version
+
           fi
 
       - name: Compilar NeoForge
-        shell: bash
         run: |
-          set -e
-
           cd "$PROJECT_DIR"
 
           echo "=============================="
-          echo "COMPILANDO GALLO GIRO"
+          echo "COMPILANDO NEFORGE"
           echo "=============================="
 
           if [ -f "./gradlew" ]; then
+
+            chmod +x ./gradlew
             ./gradlew build --no-daemon
+
           else
+
             gradle build --no-daemon
+
           fi
 
       - name: Buscar JAR
-        shell: bash
         run: |
-          set -e
+          python3 <<'PY'
+          import os
+          import shutil
 
-          echo "=============================="
-          echo "BUSCANDO JAR"
-          echo "=============================="
+          carpeta = os.environ["PROJECT_DIR"]
+          libs = os.path.join(carpeta, "build", "libs")
 
-          find "$PROJECT_DIR/build/libs" \
-            -type f \
-            -name "*.jar" \
-            -print
+          if not os.path.isdir(libs):
+              print("ERROR: No existe build/libs.")
+              raise SystemExit(1)
 
-          JAR_FILE=""
+          jars = []
 
-          while IFS= read -r file; do
-            JAR_FILE="$file"
-            break
-          done < <(
-            find "$PROJECT_DIR/build/libs" \
-              -type f \
-              -name "*.jar" \
-              ! -name "*-sources.jar" \
-              ! -name "*-javadoc.jar"
-          )
+          for archivo in os.listdir(libs):
+              if archivo.endswith(".jar"):
+                  if "-sources" not in archivo and "-javadoc" not in archivo:
+                      jars.append(os.path.join(libs, archivo))
 
-          if [ -z "$JAR_FILE" ]; then
-            echo "ERROR: No se generó ningún JAR."
-            exit 1
-          fi
+          if not jars:
+              print("ERROR: No se encontró ningún JAR.")
+              print("Archivos encontrados:")
+              for archivo in os.listdir(libs):
+                  print(archivo)
+              raise SystemExit(1)
 
-          echo "JAR encontrado:"
-          echo "$JAR_FILE"
+          jar = jars[0]
 
-          mkdir -p salida
-          cp "$JAR_FILE" salida/GalloGiro-NeoForge-1.21.1.jar
+          print("JAR encontrado:")
+          print(jar)
+
+          os.makedirs("salida", exist_ok=True)
+
+          destino = "salida/GalloGiro-NeoForge-1.21.1.jar"
+
+          shutil.copy2(jar, destino)
+
+          print("JAR preparado:")
+          print(destino)
+          PY
 
       - name: Subir JAR
         uses: actions/upload-artifact@v4
