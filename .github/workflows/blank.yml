@@ -20,57 +20,32 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
 
       - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14'
 
-      - name: Buscar proyecto NeoForge
-        shell: bash
+      - name: Encontrar proyecto
         run: |
-          set -e
-
-          echo "Buscando build.gradle..."
-
-          PROJECT_DIR=$(find . -type f -name "build.gradle" -o -name "build.gradle.kts" -not -path "*/build/*" -print -quit | xargs -r dirname)
-
+          PROJECT_DIR=$(find . -type f -name "build.gradle" -not -path "*/build/*" -print -quit | xargs dirname)
           if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: No se encontró build.gradle ni build.gradle.kts."
-            echo "Archivos del repositorio:"
-            find . -maxdepth 5 -type f | head -200
+            echo "No se encontró build.gradle"
             exit 1
           fi
-
-          PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd)
-
-          echo "Proyecto encontrado en:"
-          echo "$PROJECT_DIR"
-
+          echo "Proyecto: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Compilar NeoForge
-        shell: bash
         run: |
-          set -e
-
           cd "$PROJECT_DIR"
-
-          echo "Directorio:"
-          pwd
-
-          echo "Contenido:"
-          ls -la
-
-          echo "Versión de Java:"
-          java -version
-
-          echo "Versión de Gradle:"
-          gradle --version
-
-          echo "Compilando mod..."
-
           gradle clean build --no-daemon --stacktrace
 
-      -
+      - name: Buscar JAR
+        run: |
+          find "$PROJECT_DIR/build/libs" -type f -name "*.jar"
+
+      - name: Subir JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-NeoForge-1.21.
