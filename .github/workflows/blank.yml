@@ -3,8 +3,6 @@ name: Compilar JAR
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
 
 jobs:
   build:
@@ -20,27 +18,24 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Encontrar Gradle
+      - name: Instalar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.7.1'
+
+      - name: Encontrar proyecto NeoForge
         run: |
-          GRADLEW=$(find . -type f -name gradlew | head -n 1)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: No se encontró gradlew"
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$GRADLEW")
-
-          echo "Proyecto encontrado: $PROJECT_DIR"
-
-          chmod +x "$GRADLEW"
-
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Buscando build.gradle..."
+          find . -name "build.gradle" -o -name "build.gradle.kts"
 
       - name: Compilar JAR
         run: |
-          cd "$PROJECT_DIR"
-          ./gradlew build --no-daemon
+          gradle build --no-daemon
+
+      - name: Buscar JAR
+        run: |
+          echo "JAR generados:"
+          find . -type f -name "*.jar"
 
       - name: Entregar JAR
         uses: actions/upload-artifact@v4
