@@ -17,9 +17,24 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
+      - name: Buscar JAR
+        shell: bash
+        run: |
+          JAR=$(find . -type f -name "*.jar" -not -path "./.git/*" | head -n 1)
+
+          if [ -z "$JAR" ]; then
+            echo "ERROR: No se encontró ningún archivo JAR."
+            echo "Archivos del repositorio:"
+            find . -maxdepth 5 -type f
+            exit 1
+          fi
+
+          echo "JAR encontrado: $JAR"
+          echo "JAR_PATH=$JAR" >> "$GITHUB_ENV"
+
       - name: Subir GalloGiro
         uses: actions/upload-artifact@v4
         with:
           name: GalloGiro-NeoForge-1.21.1
-          path: "*.jar"
+          path: ${{ env.JAR_PATH }}
           if-no-files-found: error
