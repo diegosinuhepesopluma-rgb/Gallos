@@ -22,15 +22,12 @@ jobs:
         shell: bash
         run: |
           set -e
-
-          ZIP=$(find . -maxdepth 2 -type f -iname "*.zip" | head -n 1)
+          ZIP=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
 
           if [ -z "$ZIP" ]; then
-            echo "No se encontró ningún ZIP"
+            echo "ERROR: No se encontró el ZIP"
             exit 1
           fi
-
-          echo "ZIP encontrado: $ZIP"
 
           mkdir -p proyecto
           unzip -o "$ZIP" -d proyecto
@@ -40,6 +37,33 @@ jobs:
         run: |
           set -e
 
-          DIR=$(find "$GITHUB_WORKSPACE/proyecto" \
-            -type f -name "build.gradle" \
-            -not -path "*/build/*"
+          DIR=$(find "$GITHUB_WORKSPACE/proyecto" -type f -name "build.gradle" -print -quit)
+
+          if [ -z "$DIR" ]; then
+            echo "ERROR: No se encontró build.gradle"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$DIR")
+
+          echo "Proyecto encontrado:"
+          echo "$PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Compilar JAR
+        shell: bash
+        run: |
+          set -e
+          cd "$PROJECT_DIR"
+
+          echo "COMPILANDO GALLOGIRO NEOFORGE 1.21.1"
+
+          gradle build --no-daemon
+
+      - name: Entregar JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-NeoForge-1.21.1
+          path: "**/build/libs/*.jar"
+          if-no-files-found: error
