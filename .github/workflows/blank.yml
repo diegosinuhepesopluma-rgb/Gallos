@@ -3,20 +3,21 @@ package com.gallogiro.gallogiro.registry;
 import com.gallogiro.gallogiro.GalloGiro;
 import com.gallogiro.gallogiro.entity.GalloEntity;
 
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
-import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.neoforge.registries.DeferredHolder;
 
 public class ModEntities {
 
-    public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
-            DeferredRegister.create(BuiltInRegistries.ENTITY_TYPE, GalloGiro.MOD_ID);
+    public static final DeferredRegister.Entities ENTITY_TYPES =
+            DeferredRegister.createEntities(GalloGiro.MOD_ID);
 
     public static final DeferredHolder<EntityType<?>, EntityType<GalloEntity>> GALLO =
-            ENTITY_TYPES.register("gallo",
-                    () -> EntityType.Builder.of(GalloEntity::new, MobCategory.CREATURE)
-                            .sized(0.6F, 1.0F)
-                            .build("gallo"));
+            ENTITY_TYPES.registerEntityType(
+                    "gallo",
+                    GalloEntity::new,
+                    MobCategory.CREATURE,
+                    builder -> builder.sized(0.6F, 1.0F)
+            );
 }
