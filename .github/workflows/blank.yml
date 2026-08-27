@@ -1,10 +1,10 @@
 name: Compilar y generar JAR
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build:
@@ -17,8 +17,40 @@ jobs:
       - name: Configurar Java 21
         uses: actions/setup-java@v5
         with:
-          distribution: temurin
           java-version: '21'
+          distribution: 'temurin'
+
+      - name: Mostrar archivos
+        shell: bash
+        run: |
+          echo "=============================="
+          echo "ARCHIVOS DEL REPOSITORIO"
+          echo "=============================="
+          find . -maxdepth 3 -type f -print
+
+      - name: Encontrar ZIP del mod
+        shell: bash
+        run: |
+          set -e
+
+          ZIP_FILE=""
+
+          while IFS= read -r file; do
+            case "$file" in
+              *.zip)
+                ZIP_FILE="$file"
+                break
+                ;;
+            esac
+          done < <(find . -type f -name "*.zip" -not -path "./.git/*")
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No se encontró ningún ZIP."
+            exit 1
+          fi
+
+          echo "ZIP encontrado: $ZIP_FILE"
+          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
       - name: Descomprimir proyecto
         shell: bash
@@ -29,4 +61,131 @@ jobs:
           echo "DESCOMPRIMIENDO GALLO GIRO"
           echo "=============================="
 
-          ZIP=$(find . -maxdepth 
+          rm -rf proyecto_neoforge
+          mkdir -p proyecto_neoforge
+
+          unzip -q "$ZIP_FILE" -d proyecto_neoforge
+
+          echo "Contenido descomprimido:"
+          find proyecto_neoforge -maxdepth 5 -type f -print
+
+      - name: Encontrar proyecto NeoForge
+        shell: bash
+        run: |
+          set -e
+
+          echo "=============================="
+          echo "BUSCANDO build.gradle"
+          echo "=============================="
+
+          BUILD_FILE=""
+
+          while IFS= read -r file; do
+            BUILD_FILE="$file"
+            break
+          done < <(
+            find proyecto_neoforge \
+              -type f \
+              \( -name "build.gradle" -o -name "build.gradle.kts" \) \
+              -not -path "*/.gradle/*"
+          )
+
+          if [ -z "$BUILD_FILE" ]; then
+            echo "ERROR: No se encontró build.gradle dentro del ZIP."
+            echo ""
+            echo "Archivos encontrados:"
+            find proyecto_neoforge -type f -print
+            exit 1
+          fi
+
+          PROJECT_DIR="$(dirname "$BUILD_FILE")"
+
+          echo "Proyecto NeoForge encontrado en:"
+          echo "$PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Preparar Gradle
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          echo "=============================="
+          echo "PREPARANDO GRADLE"
+          echo "=============================="
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            echo "Se encontró Gradle Wrapper."
+            ./gradlew --version
+          else
+            echo "No hay gradlew."
+            echo "Instalando Gradle 8.10..."
+            sudo apt-get update
+            sudo apt-get install -y gradle
+            gradle --version
+          fi
+
+      - name: Compilar NeoForge
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          echo "=============================="
+          echo "COMPILANDO GALLO GIRO"
+          echo "=============================="
+
+          if [ -f "./gradlew" ]; then
+            ./gradlew build --no-daemon
+          else
+            gradle build --no-daemon
+          fi
+
+      - name: Buscar JAR
+        shell: bash
+        run: |
+          set -e
+
+          echo "=============================="
+          echo "BUSCANDO JAR"
+          echo "=============================="
+
+          find "$PROJECT_DIR/build/libs" \
+            -type f \
+            -name "*.jar" \
+            -print
+
+          JAR_FILE=""
+
+          while IFS= read -r file; do
+            JAR_FILE="$file"
+            break
+          done < <(
+            find "$PROJECT_DIR/build/libs" \
+              -type f \
+              -name "*.jar" \
+              ! -name "*-sources.jar" \
+              ! -name "*-javadoc.jar"
+          )
+
+          if [ -z "$JAR_FILE" ]; then
+            echo "ERROR: No se generó ningún JAR."
+            exit 1
+          fi
+
+          echo "JAR encontrado:"
+          echo "$JAR_FILE"
+
+          mkdir -p salida
+          cp "$JAR_FILE" salida/GalloGiro-NeoForge-1.21.1.jar
+
+      - name: Subir JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-NeoForge-1.21.1
+          path: salida/GalloGiro-NeoForge-1.21.1.jar
+          if-no-files-found: error
