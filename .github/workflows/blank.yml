@@ -1,4 +1,4 @@
-name: Compilar NeoForge 1.21.1
+name: GalloGiro 1.21.1
 
 on:
   workflow_dispatch:
@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
@@ -19,7 +20,6 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
 
       - name: Buscar proyecto NeoForge
         shell: bash
@@ -27,26 +27,80 @@ jobs:
           set -e
 
           echo "========================================"
-          echo "BUSCANDO PROYECTO GALLOGIRO"
+          echo "BUSCANDO PROYECTO NEOFORGE"
           echo "========================================"
 
-          PROJECT=""
+          BUILD_FILE=$(find . \
+            -type f \
+            -name "build.gradle" -o -name "build.gradle.kts" \
+            -not -path "./.git/*" \
+            | head -n 1)
 
-          # Buscar build.gradle en cualquier carpeta,
-          # ignorando .git
-          while IFS= read -r file; do
-            DIR="$(dirname "$file")"
+          if [ -z "$BUILD_FILE" ]; then
+            echo "ERROR: No se encontró build.gradle."
+            echo ""
+            echo "Archivos del repositorio:"
+            find . -maxdepth 5 -type f \
+              -not -path "./.git/*" \
+              | head -n 200
+            exit 1
+          fi
 
-            if [ -f "$DIR/src/main/java" ] || [ -d "$DIR/src/main/java" ]; then
-              PROJECT="$DIR"
-              break
-            fi
+          PROJECT_DIR=$(dirname "$BUILD_FILE")
 
-            # Si simplemente contiene build.gradle,
-            # también sirve como proyecto
-            PROJECT="$DIR"
-            break
-          done < <(find . -type f -name "build.gradle" -not -path "./.git/*" | sort)
+          echo "BUILD: $BUILD_FILE"
+          echo "PROYECTO: $PROJECT_DIR"
 
-          # Si no encontró build.gradle, buscar build.gradle.kts
-          if [ -z "$PROJECT" ];
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Verificar proyecto
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          echo "========================================"
+          echo "PROYECTO NEOFORGE ENCONTRADO"
+          echo "========================================"
+
+          pwd
+
+          echo ""
+          echo "Contenido:"
+          ls -la
+
+          echo ""
+          echo "Build:"
+          ls -l build.gradle* 2>/dev/null || true
+
+      - name: Preparar Gradle
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            echo "Usando Gradle Wrapper"
+            ./gradlew --version
+          else
+            echo "No existe gradlew."
+            echo "Instalando Gradle..."
+
+            sudo apt-get update
+            sudo apt-get install -y gradle
+
+            gradle --version
+          fi
+
+      - name: Compilar NeoForge
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          echo "========================================"
+          echo "COMPILANDO GALLOG
