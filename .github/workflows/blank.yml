@@ -1,17 +1,15 @@
 name: Compilar NeoForge
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-  workflow_dispatch:
-
-permissions:
-  contents: read
+      - master
 
 jobs:
   build:
-    name: Compilar NeoForge
+    name: Compilar NeoForge 1.21.1
     runs-on: ubuntu-latest
 
     steps:
@@ -22,121 +20,160 @@ jobs:
       - name: Configurar Java 21
         uses: actions/setup-java@v5
         with:
-          distribution: temurin
           java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Instalar Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Preparar proyecto NeoForge
+      - name: Buscar proyecto NeoForge
         shell: bash
         run: |
           set -e
 
-          echo "================================="
-          echo "   PREPARANDO PROYECTO GALLOGIRO"
-          echo "================================="
+          echo "======================================"
+          echo " BUSCANDO PROYECTO NEOFORGE"
+          echo "======================================"
 
-          mkdir -p proyecto
+          BUILD_FILE=$(find . -type f -name "build.gradle" -not -path "./.git/*" | head -n 1)
 
-          # Buscar ZIP del proyecto
-          ZIP=$(find . -maxdepth 3 -type f -iname "*.zip" \
-            -not -path "./.git/*" | head -n 1 || true)
-
-          if [ -n "$ZIP" ]; then
-            echo "ZIP encontrado:"
-            echo "$ZIP"
-
-            unzip -o "$ZIP" -d proyecto
-          fi
-
-          # Buscar build.gradle
-          BUILD=$(find . -type f -name "build.gradle" \
-            -not -path "./.git/*" | head -n 1 || true)
-
-          if [ -z "$BUILD" ]; then
+          if [ -z "$BUILD_FILE" ]; then
+            echo "ERROR: No se encontró build.gradle"
             echo ""
-            echo "ERROR: No se encontró build.gradle."
-            echo ""
-            echo "Archivos encontrados:"
-            find . -maxdepth 5 -type f | head -n 200
+            echo "Archivos del repositorio:"
+            find . -maxdepth 5 -type f | sort
             exit 1
           fi
 
-          PROJECT_DIR=$(dirname "$BUILD")
+          PROJECT_DIR=$(dirname "$BUILD_FILE")
 
+          echo "build.gradle encontrado:"
+          echo "$BUILD_FILE"
           echo ""
-          echo "Proyecto NeoForge encontrado en:"
+          echo "Proyecto:"
           echo "$PROJECT_DIR"
-          echo ""
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Verificar proyecto
+        shell: bash
+        run: |
+          set -e
 
           cd "$PROJECT_DIR"
 
-          echo "Contenido del proyecto:"
+          echo "======================================"
+          echo " PROYECTO ENCONTRADO"
+          echo "======================================"
+
+          echo "Directorio:"
+          pwd
+
+          echo ""
+          echo "Contenido:"
           ls -la
 
-          if [ ! -f build.gradle ]; then
-            echo "ERROR: build.gradle no existe."
-            exit 1
-          fi
-
-          if [ ! -d src ]; then
-            echo "ERROR: no existe la carpeta src."
+          if [ ! -f "build.gradle" ]; then
+            echo "ERROR: Falta build.gradle"
             exit 1
           fi
 
           echo ""
-          echo "Proyecto preparado correctamente."
+          echo "build.gradle encontrado correctamente."
+
+          if [ ! -f "gradlew" ]; then
+            echo "ERROR: Falta gradlew"
+            echo ""
+            echo "Este proyecto debe contener el Gradle Wrapper."
+            exit 1
+          fi
+
+          chmod +x gradlew
+
+          echo ""
+          echo "Gradle Wrapper encontrado."
+
+      - name: Mostrar versión de Gradle
+        shell: bash
+        run: |
+          cd "$PROJECT_DIR"
+          chmod +x gradlew
+          ./gradlew --version
+
+      - name: Limpiar proyecto
+        shell: bash
+        run: |
+          cd "$PROJECT_DIR"
+          chmod +x gradlew
+          ./gradlew clean
 
       - name: Compilar NeoForge
         shell: bash
         run: |
           set -e
 
-          BUILD=$(find . -type f -name "build.gradle" \
-            -not -path "./.git/*" | head -n 1)
-
-          PROJECT_DIR=$(dirname "$BUILD")
-
           cd "$PROJECT_DIR"
 
-          echo "Compilando desde:"
-          pwd
+          chmod +x gradlew
 
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew clean build --no-daemon --stacktrace
-          else
-            gradle clean build --no-daemon --stacktrace
-          fi
+          echo "======================================"
+          echo " COMPILANDO GALLOGIRO"
+          echo " NEOFORGE 1.21.1"
+          echo "======================================"
 
-      - name: Comprobar JAR
+          ./gradlew build --no-daemon --stacktrace
+
+      - name: Buscar JAR generado
         shell: bash
         run: |
           set -e
 
-          echo "================================="
-          echo "       JAR GENERADO"
-          echo "================================="
+          cd "$PROJECT_DIR"
 
-          find . -type f -path "*/build/libs/*.jar" -print
+          echo "======================================"
+          echo " BUSCANDO JAR"
+          echo "======================================"
 
-          JAR=$(find . -type f -path "*/build/libs/*.jar" | head -n 1 || true)
+          echo ""
+          echo "Archivos JAR encontrados:"
+
+          find build/libs -type f -name "*.jar" -print
+
+          JAR=$(find build/libs -maxdepth 1 -type f -name "*.jar" \
+            ! -name "*-sources.jar" \
+            ! -name "*-javadoc.jar" \
+            | head -n 1)
 
           if [ -z "$JAR" ]; then
+            echo ""
             echo "ERROR: No se generó ningún JAR."
+            echo ""
+            echo "Contenido de build:"
+            find build -maxdepth 4 -type f | sort
             exit 1
           fi
 
           echo ""
-          echo "JAR encontrado:"
+          echo "JAR GENERADO:"
           echo "$JAR"
+
+          echo "JAR_FILE=$JAR" >> "$GITHUB_ENV"
+
+      - name: Comprobar JAR
+        shell: bash
+        run: |
+          cd "$PROJECT_DIR"
+
+          echo "======================================"
+          echo " COMPROBANDO JAR"
+          echo "======================================"
+
+          ls -lh "$JAR_FILE"
+
+          file "$JAR_FILE"
 
       - name: Subir JAR a Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: GalloGiro-NeoForge-1.21.1-JAR
-          path: |
-            **/build/libs/*.jar
+          name: GalloGiro-NeoForge-1.21.1
+          path: ${{ env.PROJECT_DIR }}/build/libs/*.jar
           if-no-files-found: error
           retention-days: 30
