@@ -19,7 +19,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: 'none'
 
       - name: Buscar ZIP del mod
         shell: bash
@@ -28,7 +27,7 @@ jobs:
 
           echo "=== BUSCANDO ZIP ==="
 
-          ZIP=$(find . -maxdepth 3 -type f -iname "*.zip" | head -n 1)
+          ZIP=$(find . -maxdepth 3 -type f -name "*.zip" | head -n 1)
 
           if [ -z "$ZIP" ]; then
             echo "ERROR: No se encontró ningún ZIP"
@@ -43,32 +42,24 @@ jobs:
           unzip -q "$ZIP" -d proyecto
 
           echo "=== CONTENIDO ==="
-          find proyecto -maxdepth 3 -type f | head -100
+          find proyecto -maxdepth 4 -type f | head -100
 
       - name: Encontrar carpeta del proyecto
         shell: bash
         run: |
           set -e
 
-          echo "=== BUSCANDO build.gradle ==="
+          PROJECT=$(find proyecto -type f -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
 
-          BUILD=$(find proyecto -type f -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
-
-          if [ -z "$BUILD" ]; then
+          if [ -z "$PROJECT" ]; then
             echo "ERROR: No se encontró build.gradle"
             exit 1
           fi
 
-          PROJECT_DIR=$(dirname "$BUILD")
+          PROJECT_DIR=$(dirname "$PROJECT")
 
           echo "Proyecto encontrado en: $PROJECT_DIR"
-
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.11'
 
       - name: Preparar Gradle
         shell: bash
@@ -77,7 +68,51 @@ jobs:
 
           cd "$PROJECT_DIR"
 
-          echo "=== PROYECTO ==="
-          pwd
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            echo "Gradle Wrapper encontrado."
+          else
+            echo "ERROR: No existe gradlew en el proyecto."
+            echo "El ZIP debe contener gradlew y gradle/wrapper."
+            exit 1
+          fi
 
-          echo "=== ARCH
+      - name: Compilar JAR NeoForge 1.21.1
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          echo "=== COMPILANDO GALLOGIRO ==="
+
+          ./gradlew build --no-daemon
+
+      - name: Buscar JAR generado
+        shell: bash
+        run: |
+          set -e
+
+          echo "=== JAR GENERADOS ==="
+
+          find "$PROJECT_DIR/build/libs" -type f -name "*.jar" -print
+
+          JAR=$(find "$PROJECT_DIR/build/libs" -type f -name "*.jar" \
+            ! -name "*-sources.jar" \
+            ! -name "*-dev.jar" \
+            | head -n 1)
+
+          if [ -z "$JAR" ]; then
+            echo "ERROR: No se generó ningún JAR"
+            exit 1
+          fi
+
+          echo "JAR encontrado: $JAR"
+          echo "JAR=$JAR" >> "$GITHUB_ENV"
+
+      - name: Entregar JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-NeoForge-1.21.1
+          path: ${{ env.JAR }}
+          if-no-files-found: error
