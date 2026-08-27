@@ -19,30 +19,46 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: gradle
 
-      - name: Mostrar archivos
+      - name: Comprobar proyecto
         run: |
-          echo "================================"
-          echo "ARCHIVOS DEL PROYECTO"
-          echo "================================"
+          echo "=== PROYECTO ==="
           pwd
-          find . -maxdepth 3 -type f | sort
+          echo "=== ARCHIVOS ==="
+          ls -la
+          echo "=== BUILD.GRADLE ==="
+          test -f build.gradle
+          echo "build.gradle encontrado correctamente"
 
-      - name: Encontrar proyecto NeoForge
-        shell: bash
+      - name: Instalar Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilar NeoForge
         run: |
-          set -e
+          echo "=== COMPILANDO GALLO GIRO ==="
+          gradle build --no-daemon --stacktrace
+          echo "=== COMPILACION TERMINADA ==="
 
-          echo "================================"
-          echo "BUSCANDO build.gradle"
-          echo "================================"
+      - name: Buscar JAR
+        run: |
+          echo "=== JAR GENERADO ==="
+          find build/libs -type f -name "*.jar" -print
+          
+          JAR=$(find build/libs -type f -name "*.jar" ! -name "*-sources.jar" ! -name "*-dev.jar" | head -n 1)
 
-          PROJECT_DIR=""
+          if [ -z "$JAR" ]; then
+            echo "ERROR: No se genero ningun JAR"
+            exit 1
+          fi
 
-          while IFS= read -r FILE; do
-            DIR="$(dirname "$FILE")"
-            if [ -f "$DIR/build.gradle" ]; then
-              PROJECT_DIR="$DIR"
-              break
-            fi
-          done <
+          echo "JAR encontrado: $JAR"
+          mkdir -p release
+          cp "$JAR" release/GalloGiro-NeoForge-1.21.1.jar
+
+      - name: Subir JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-NeoForge-1.21.1
+          path: release/GalloGiro-NeoForge-1.21.1.jar
+          if-no-files-found: error
