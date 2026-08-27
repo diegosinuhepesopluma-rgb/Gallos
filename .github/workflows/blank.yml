@@ -1,4 +1,4 @@
-name: Compilar GalloGiro NeoForge 1.21.1
+name: Generar JAR NeoForge 1.21.1
 
 on:
   workflow_dispatch:
@@ -29,37 +29,15 @@ jobs:
         with:
           gradle-version: '8.12.1'
 
-      - name: Verificar proyecto
+      - name: Preparar proyecto GalloGiro
         shell: bash
         run: |
           set -e
-          echo "=== PROYECTO GALLOGIRO ==="
-          pwd
-          test -f build.gradle
-          test -f settings.gradle
-          test -f gradle.properties
-          test -d src/main/java
-          test -d src/main/resources
-          echo "Proyecto encontrado correctamente en la raíz."
 
-      - name: Compilar JAR NeoForge 1.21.1
-        shell: bash
-        run: |
-          set -e
-          gradle clean build --no-daemon --stacktrace
+          echo "================================"
+          echo " PREPARANDO GALLOGIRO"
+          echo "================================"
 
-      - name: Verificar JAR
-        shell: bash
-        run: |
-          set -e
-          echo "=== JAR GENERADO ==="
-          find build/libs -maxdepth 1 -type f -name "*.jar" -print
-          test -n "$(find build/libs -maxdepth 1 -type f -name "*.jar" -print -quit)"
+          PROJECT=""
 
-      - name: Entregar JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: GalloGiro-NeoForge-1.21.1
-          path: build/libs/*.jar
-          if-no-files-found: error
-          retention-days: 30
+          if [ -f "build.gradle" ] || [
