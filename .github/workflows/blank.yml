@@ -2,7 +2,8 @@ name: Generar JAR NeoForge 1.21.1
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -19,42 +20,91 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11'
+
       - name: Buscar y preparar proyecto
         shell: bash
         run: |
           set -e
 
-          echo "=== BUSCANDO PROYECTO GALLOGIRO ==="
+          echo "================================"
+          echo "   BUSCANDO PROYECTO GALLOGIRO"
+          echo "================================"
 
           PROJECT_DIR=""
 
+          # Si el proyecto ya está en la raíz
           if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
             PROJECT_DIR="."
           fi
 
-          for ZIP in ./*.zip; do
-            if [ -f "$ZIP" ]; then
-              echo "Descomprimiendo: $ZIP"
-              mkdir -p proyecto
-              unzip -o "$ZIP" -d proyecto
+          # Buscar ZIP del proyecto
+          if [ -z "$PROJECT_DIR" ]; then
+            for ZIP in ./*.zip; do
+              if [ -f "$ZIP" ]; then
+                echo "ZIP encontrado: $ZIP"
 
-              if [ -f "proyecto/build.gradle" ] || [ -f "proyecto/build.gradle.kts" ]; then
-                PROJECT_DIR="proyecto"
-                break
+                rm -rf proyecto
+                mkdir -p proyecto
+
+                unzip -o "$ZIP" -d proyecto
+
+                if [ -f "proyecto/build.gradle" ] || [ -f "proyecto/build.gradle.kts" ]; then
+                  PROJECT_DIR="proyecto"
+                  break
+                fi
+
+                # Buscar un nivel más abajo
+                FOUND=$(find proyecto -maxdepth 3 -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) | head -n 1 || true)
+
+                if [ -n "$FOUND" ]; then
+                  PROJECT_DIR=$(dirname "$FOUND")
+                  break
+                fi
               fi
-            fi
-          done
+            done
+          fi
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: No se encontró build.gradle"
+            echo "ERROR: No se encontró build.gradle ni build.gradle.kts"
+            echo "Archivos encontrados:"
+            find . -maxdepth 4 -type f | head -100
             exit 1
           fi
 
-          echo "Proyecto encontrado en: $PROJECT_DIR"
+          echo "Proyecto encontrado en:"
+          echo "$PROJECT_DIR"
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Verificar proyecto NeoForge
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          echo "================================"
+          echo "   GALLOGIRO NEOFORGE 1.21.1"
+          echo "================================"
+
+          echo "Directorio:"
+          pwd
+
+          echo ""
+          echo "Archivos del proyecto:"
+          find . -maxdepth 3 -type f | sort | head -150
+
+          if [ ! -f "build.gradle" ] && [ ! -f "build.gradle.kts" ]; then
+            echo "ERROR: Falta build.gradle o build.gradle.kts"
+            exit 1
+          fi
+
+          echo ""
+          echo "Proyecto válido."
 
       - name: Compilar JAR
         shell: bash
@@ -63,18 +113,50 @@ jobs:
 
           cd "$PROJECT_DIR"
 
-          echo "=== COMPILANDO GALLOGIRO ==="
+          echo "================================"
+          echo "       COMPILANDO GALLOGIRO"
+          echo "================================"
 
-          chmod +x gradlew
-          ./gradlew clean build --no-daemon
+          gradle clean build --no-daemon
 
-      - name: Verificar JAR
+      - name: Verificar JAR generado
         shell: bash
         run: |
           set -e
 
-          echo "=== BUSCANDO JAR ==="
+          echo "================================"
+          echo "        BUSCANDO JAR"
+          echo "================================"
 
           mkdir -p salida
 
-          JAR=$(find "$PROJECT_DIR/build/libs" -maxdepth 1 -type f -name "*.
+          JAR=$(find "$PROJECT_DIR/build/libs" \
+            -maxdepth 1 \
+            -type f \
+            -name "*.jar" \
+            ! -name "*-sources.jar" \
+            ! -name "*-javadoc.jar" \
+            | head -n 1)
+
+          if [ -z "$JAR" ]; then
+            echo "ERROR: No se generó ningún JAR."
+            echo ""
+            echo "Contenido de build/libs:"
+            ls -la "$PROJECT_DIR/build/libs" || true
+            exit 1
+          fi
+
+          echo "JAR encontrado:"
+          echo "$JAR"
+
+          cp "$JAR" "salida/GalloGiro-NeoForge-1.21.1.jar"
+
+          echo ""
+          echo "JAR preparado correctamente."
+
+      - name: Entregar JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-NeoForge-1.21.1
+          path: salida/GalloGiro-NeoForge-1.21.1.jar
+          if-no-files-found: error
