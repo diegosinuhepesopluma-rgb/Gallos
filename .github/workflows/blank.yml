@@ -20,67 +20,13 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Comprobar proyecto
+      - name: Descomprimir proyecto
         shell: bash
         run: |
           set -e
+
           echo "=============================="
-          echo "PROYECTO GALLO GIRO"
-          echo "=============================="
-          pwd
-          echo ""
-          ls -la
-          echo ""
-
-          if [ ! -f "build.gradle" ]; then
-            echo "ERROR: No se encontró build.gradle en la raíz."
-            exit 1
-          fi
-
-          echo "OK: build.gradle encontrado."
-
-      - name: Instalar Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Compilar NeoForge
-        shell: bash
-        run: |
-          set -e
-          echo "=============================="
-          echo "COMPILANDO NEOFORGE"
+          echo "DESCOMPRIMIENDO GALLO GIRO"
           echo "=============================="
 
-          gradle build --no-daemon --stacktrace
-
-      - name: Buscar JAR
-        shell: bash
-        run: |
-          set -e
-          echo "=============================="
-          echo "BUSCANDO JAR"
-          echo "=============================="
-
-          ls -la build/libs
-
-          JAR=$(find build/libs -maxdepth 1 -type f -name "*.jar" \
-            ! -name "*-sources.jar" \
-            ! -name "*-dev.jar" \
-            | head -n 1)
-
-          if [ -z "$JAR" ]; then
-            echo "ERROR: No se generó ningún JAR."
-            exit 1
-          fi
-
-          echo "JAR encontrado:"
-          echo "$JAR"
-
-          mkdir -p release
-          cp "$JAR" "release/GalloGiro-NeoForge-1.21.1.jar"
-
-      - name: Subir JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: GalloGiro-NeoForge-1.21.1
-          path: release/GalloGiro-NeoForge-1.21.1.jar
-          if-no-files-found: error
+          ZIP=$(find . -maxdepth 
