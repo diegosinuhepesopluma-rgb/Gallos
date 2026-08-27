@@ -1,4 +1,4 @@
-name: Build GalloGiro NeoForge
+name: Crear JAR GalloGiro
 
 on:
   push:
@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
@@ -24,83 +25,20 @@ jobs:
         shell: bash
         run: |
           set -e
+          echo "Buscando ZIP..."
 
-          echo "================================"
-          echo "BUSCANDO ZIP DEL PROYECTO"
-          echo "================================"
+          ZIP=$(find . -type f -name "*.zip" -not -path "./.git/*" | head -n 1)
 
-          ZIP_FILE=$(find . -type f -iname "*.zip" \
-            -not -path "./.git/*" \
-            -print -quit)
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "No se encontró ningún ZIP."
+          if [ -z "$ZIP" ]; then
+            echo "No se encontró ZIP."
             exit 1
           fi
 
-          echo "ZIP encontrado:"
-          echo "$ZIP_FILE"
+          echo "ZIP encontrado: $ZIP"
 
-          rm -rf project
-          mkdir -p project
+          mkdir -p proyecto
+          unzip -o "$ZIP" -d proyecto
 
-          unzip -o "$ZIP_FILE" -d project
+          echo "ZIP descomprimido."
 
-          echo "ZIP descomprimido correctamente."
-
-      - name: Encontrar proyecto NeoForge
-        shell: bash
-        run: |
-          set -e
-
-          echo "================================"
-          echo "BUSCANDO PROYECTO GRADLE"
-          echo "================================"
-
-          BUILD_FILE=$(find "$GITHUB_WORKSPACE/project" \
-            -type f \
-            -name "build.gradle" \
-            -not -path "*/build/*" \
-            -print -quit)
-
-          if [ -z "$BUILD_FILE" ]; then
-            BUILD_FILE=$(find "$GITHUB_WORKSPACE/project" \
-              -type f \
-              -name "build.gradle.kts" \
-              -not -path "*/build/*" \
-              -print -quit)
-          fi
-
-          if [ -z "$BUILD_FILE" ]; then
-            echo "ERROR: No se encontró build.gradle."
-            echo ""
-            echo "Archivos encontrados:"
-            find "$GITHUB_WORKSPACE/project" -maxdepth 5 -type f | head -200
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$BUILD_FILE")
-
-          echo "Proyecto NeoForge encontrado:"
-          echo "$PROJECT_DIR"
-
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-      - name: Instalar Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.14'
-
-      - name: Preparar proyecto
-        shell: bash
-        run: |
-          set -e
-
-          cd "$PROJECT_DIR"
-
-          echo "================================"
-          echo "PREPARANDO PROYECTO"
-          echo "================================"
-
-          if [ -f "./gradlew" ]; then
-            chmod +x ./
+      -
