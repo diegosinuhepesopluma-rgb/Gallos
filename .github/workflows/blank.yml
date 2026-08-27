@@ -1,10 +1,10 @@
 name: Build NeoForge Mod
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   build:
@@ -22,8 +22,23 @@ jobs:
 
       - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.14"
+
+      - name: Buscar y descomprimir ZIP
+        shell: bash
+        run: |
+          set -e
+
+          echo "Buscando ZIP del proyecto..."
+
+          ZIP_FILE=$(find . -maxdepth 3 -type f -name "*.zip" -print -quit || true)
+
+          if [ -n "$ZIP_FILE" ]; then
+            echo "ZIP encontrado: $ZIP_FILE"
+            mkdir -p project
+            unzip -o "$ZIP_FILE" -d project
+          else
+            echo "No hay ZIP. Usando el repositorio directamente."
+          fi
 
       - name: Buscar proyecto NeoForge
         shell: bash
@@ -32,27 +47,13 @@ jobs:
 
           echo "Buscando build.gradle..."
 
-          PROJECT_DIR=""
+          PROJECT_DIR=$(find . \
+            -type f \
+            -name "build.gradle" \
+            -not -path "./.git/*" \
+            -not -path "./build/*" \
+            -print \
+            -quit \
+          )
 
-          FILE=$(find . -type f -name "build.gradle" \
-            ! -path "./.git/*" \
-            -print -quit)
-
-          if [ -n "$FILE" ]; then
-            PROJECT_DIR="$(dirname "$FILE")"
-          fi
-
-          if [ -z "$PROJECT_DIR" ]; then
-            FILE=$(find . -type f -name "build.gradle.kts" \
-              ! -path "./.git/*" \
-              -print -quit)
-
-            if [ -n "$FILE" ]; then
-              PROJECT_DIR="$(dirname "$FILE")"
-            fi
-          fi
-
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: No se encontró build.gradle."
-            echo ""
-            echo "Arch
+         
