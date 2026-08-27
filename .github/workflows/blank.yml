@@ -1,4 +1,4 @@
-name: Compilar y generar JAR GalloGiro
+name: Compilar NeoForge
 
 on:
   push:
@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
@@ -23,74 +24,110 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-          cache: gradle
 
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: "8.12.1"
+      - name: Buscar proyecto NeoForge
+        shell: bash
+        run: |
+          set -e
+
+          echo "Buscando build.gradle..."
+
+          BUILD_FILE=$(find . -type f -name "build.gradle" -not -path "./.git/*" | head -n 1)
+
+          if [ -z "$BUILD_FILE" ]; then
+            echo "ERROR: No se encontró build.gradle."
+            echo ""
+            echo "Archivos encontrados:"
+            find . -maxdepth 4 -type f | sort
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$BUILD_FILE")
+
+          echo "build.gradle encontrado en:"
+          echo "$BUILD_FILE"
+
+          echo "Proyecto:"
+          echo "$PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Preparar Gradle
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          echo "Entrando a:"
+          pwd
+
+          echo ""
+          echo "Contenido:"
+          ls -la
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            echo "Gradle Wrapper encontrado."
+          else
+            echo "No hay Gradle Wrapper."
+            echo "Se instalará Gradle 8.12.1."
+
+            sudo apt-get update
+            sudo apt-get install -y unzip
+
+            wget -q https://services.gradle.org/distributions/gradle-8.12.1-bin.zip
+            sudo unzip -q gradle-8.12.1-bin.zip -d /opt
+            export PATH="/opt/gradle-8.12.1/bin:$PATH"
+
+            echo "/opt/gradle-8.12.1/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Verificar proyecto NeoForge
         shell: bash
         run: |
           set -e
 
+          cd "$PROJECT_DIR"
+
           echo "======================================"
-          echo " VERIFICANDO GALLOGIRO NEOFORGE 1.21.1"
+          echo " PROYECTO GALLOGIRO"
+          echo " NEOFORGE 1.21.1"
           echo "======================================"
 
-          echo "Directorio actual:"
-          pwd
+          test -f build.gradle
+          test -d src
 
-          echo ""
-          echo "Archivos principales:"
-          ls -la
-
-          if [ ! -f "build.gradle" ]; then
-            echo "ERROR: No se encontró build.gradle en la raíz."
-            exit 1
-          fi
-
-          if [ ! -f "settings.gradle" ]; then
-            echo "ERROR: No se encontró settings.gradle en la raíz."
-            exit 1
-          fi
-
-          if [ ! -d "src" ]; then
-            echo "ERROR: No se encontró la carpeta src."
-            exit 1
-          fi
-
-          echo ""
-          echo "Proyecto NeoForge encontrado correctamente."
+          echo "build.gradle: OK"
+          echo "src/: OK"
 
       - name: Compilar NeoForge
         shell: bash
         run: |
           set -e
 
+          cd "$PROJECT_DIR"
+
           echo "======================================"
           echo " COMPILANDO GALLOGIRO"
-          echo " Minecraft 1.21.1"
-          echo " NeoForge"
-          echo " Java 21"
           echo "======================================"
 
-          gradle clean build --no-daemon --stacktrace
+          if [ -f "./gradlew" ]; then
+            ./gradlew clean build --no-daemon --stacktrace
+          else
+            gradle clean build --no-daemon --stacktrace
+          fi
 
       - name: Mostrar JAR generado
         shell: bash
         run: |
           set -e
 
-          echo "======================================"
-          echo " JAR GENERADOS"
-          echo "======================================"
+          cd "$PROJECT_DIR"
 
-          if [ ! -d "build/libs" ]; then
-            echo "ERROR: No existe build/libs."
-            exit 1
-          fi
+          echo "======================================"
+          echo " JAR GENERADO"
+          echo "======================================"
 
           find build/libs -maxdepth 1 -type f -name "*.jar" -print
 
@@ -101,13 +138,12 @@ jobs:
             exit 1
           fi
 
-          echo ""
-          echo "Se encontró $JAR_COUNT JAR."
+          echo "JAR encontrado correctamente."
 
       - name: Subir JAR a Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: GalloGiro-NeoForge-1.21.1
-          path: build/libs/*.jar
+          path: "**/build/libs/*.jar"
           if-no-files-found: error
           retention-days: 30
