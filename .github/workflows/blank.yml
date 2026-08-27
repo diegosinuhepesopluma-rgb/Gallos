@@ -2,8 +2,7 @@ name: Generar JAR NeoForge 1.21.1
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -15,104 +14,43 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Java 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
-      - name: Buscar ZIP del mod
+      - name: Instalar Gradle automáticamente
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14'
+
+      - name: Buscar proyecto
         shell: bash
         run: |
-          set -e
+          echo "Buscando build.gradle..."
+          find . -name "build.gradle" -o -name "build.gradle.kts"
 
-          echo "=== BUSCANDO ZIP ==="
-
-          ZIP=$(find . -maxdepth 3 -type f -name "*.zip" | head -n 1)
-
-          if [ -z "$ZIP" ]; then
-            echo "ERROR: No se encontró ningún ZIP"
-            exit 1
-          fi
-
-          echo "ZIP encontrado: $ZIP"
-
-          rm -rf proyecto
-          mkdir proyecto
-
-          unzip -q "$ZIP" -d proyecto
-
-          echo "=== CONTENIDO ==="
-          find proyecto -maxdepth 4 -type f | head -100
-
-      - name: Encontrar carpeta del proyecto
+      - name: Compilar JAR
         shell: bash
         run: |
-          set -e
-
-          PROJECT=$(find proyecto -type f -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
-
-          if [ -z "$PROJECT" ]; then
-            echo "ERROR: No se encontró build.gradle"
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$PROJECT")
-
-          echo "Proyecto encontrado en: $PROJECT_DIR"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-      - name: Preparar Gradle
-        shell: bash
-        run: |
-          set -e
-
-          cd "$PROJECT_DIR"
-
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            echo "Gradle Wrapper encontrado."
+          if [ -f "build.gradle" ]; then
+            gradle build --no-daemon
+          elif [ -f "build.gradle.kts" ]; then
+            gradle build --no-daemon
           else
-            echo "ERROR: No existe gradlew en el proyecto."
-            echo "El ZIP debe contener gradlew y gradle/wrapper."
+            echo "ERROR: No se encontró build.gradle ni build.gradle.kts"
             exit 1
           fi
 
-      - name: Compilar JAR NeoForge 1.21.1
+      - name: Buscar JAR
         shell: bash
         run: |
-          set -e
-
-          cd "$PROJECT_DIR"
-
-          echo "=== COMPILANDO GALLOGIRO ==="
-
-          ./gradlew build --no-daemon
-
-      - name: Buscar JAR generado
-        shell: bash
-        run: |
-          set -e
-
-          echo "=== JAR GENERADOS ==="
-
-          find "$PROJECT_DIR/build/libs" -type f -name "*.jar" -print
-
-          JAR=$(find "$PROJECT_DIR/build/libs" -type f -name "*.jar" \
-            ! -name "*-sources.jar" \
-            ! -name "*-dev.jar" \
-            | head -n 1)
-
-          if [ -z "$JAR" ]; then
-            echo "ERROR: No se generó ningún JAR"
-            exit 1
-          fi
-
-          echo "JAR encontrado: $JAR"
-          echo "JAR=$JAR" >> "$GITHUB_ENV"
+          find . -type f -name "*.jar" -print
 
       - name: Entregar JAR
         uses: actions/upload-artifact@v4
         with:
           name: GalloGiro-NeoForge-1.21.1
-          path: ${{ env.JAR }}
+          path: |
+            **/build/libs/*.jar
           if-no-files-found: error
