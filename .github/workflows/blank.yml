@@ -1,13 +1,10 @@
-name: Generar JAR
+name: Generar JAR NeoForge 1.21.1
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-
-permissions:
-  contents: read
 
 jobs:
   build:
@@ -18,53 +15,61 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configurar Java 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "21"
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
 
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.12.1"
-
-      - name: Preparar proyecto GalloGiro
+      - name: Buscar proyecto NeoForge
         shell: bash
         run: |
           set -e
 
-          echo "=============================="
-          echo "PREPARANDO GALLOGIRO"
-          echo "=============================="
+          echo "=== BUSCANDO PROYECTO ==="
 
-          BUILD_FILE=$(find . -type f -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
+          PROJECT=""
 
-          if [ -n "$BUILD_FILE" ]; then
-            PROJECT_DIR=$(dirname "$BUILD_FILE")
+          if [ -f "./gradlew" ]; then
+            PROJECT="."
           else
-            ZIP_FILE=$(find . -type f -name "*.zip" | head -n 1)
-
-            if [ -z "$ZIP_FILE" ]; then
-              echo "ERROR: No se encontró el proyecto ni un ZIP."
-              exit 1
-            fi
-
-            echo "ZIP: $ZIP_FILE"
-
-            rm -rf proyecto
-            mkdir proyecto
-
-            unzip -q "$ZIP_FILE" -d proyecto
-
-            BUILD_FILE=$(find proyecto -type f -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
-
-            if [ -z "$BUILD_FILE" ]; then
-              echo "ERROR: El ZIP no contiene build.gradle."
-              find proyecto -maxdepth 5 -type f
-              exit 1
-            fi
-
-            PROJECT_DIR=$(dirname "$BUILD_FILE")
+            PROJECT=$(find . -type f -name "gradlew" -print -quit | xargs -r dirname)
           fi
 
-          echo "PRO
+          if [ -z "$PROJECT" ]; then
+            echo "ERROR: No se encontró gradlew."
+            echo "Archivos Gradle encontrados:"
+            find . -type f \( -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle" -o -name "settings.gradle.kts" \) -print
+            exit 1
+          fi
+
+          echo "Proyecto encontrado en: $PROJECT"
+          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
+
+      - name: Dar permisos a Gradle
+        shell: bash
+        run: |
+          set -e
+          chmod +x "$PROJECT/gradlew"
+
+      - name: Compilar JAR
+        shell: bash
+        run: |
+          set -e
+          cd "$PROJECT"
+          ./gradlew build --no-daemon
+
+      - name: Mostrar JAR generado
+        shell: bash
+        run: |
+          set -e
+          echo "=== JAR GENERADO ==="
+          find "$PROJECT/build/libs" -type f -name "*.jar" -print
+
+      - name: Entregar JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-NeoForge-1.21.1
+          path: |
+            ${{ env.PROJECT }}/build/libs/*.jar
+          if-no-files-found: error
