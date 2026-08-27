@@ -1,9 +1,10 @@
-name: Generar JAR NeoForge 1.21.1
+name: Generar JAR GalloGiro NeoForge 1.21.1
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
@@ -19,38 +20,72 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Instalar Gradle automáticamente
+      - name: Buscar archivos del mod
+        shell: bash
+        run: |
+          echo "=== ARCHIVOS DEL REPOSITORIO ==="
+          find . -maxdepth 6 -type f | sort
+
+      - name: Buscar código Java
+        shell: bash
+        run: |
+          echo "=== JAVA ==="
+          find . -type f -name "*.java" -print
+
+      - name: Preparar proyecto NeoForge
+        shell: bash
+        run: |
+          set -e
+
+          PROJECT="$(find . -type f -name "*.java" -print -quit)"
+
+          if [ -z "$PROJECT" ]; then
+            echo "ERROR: No se encontró código Java."
+            exit 1
+          fi
+
+          SRC_DIR="$(dirname "$(dirname "$(dirname "$PROJECT")")")"
+
+          echo "Código encontrado:"
+          echo "$PROJECT"
+
+          echo "Carpeta:"
+          echo "$SRC_DIR"
+
+      - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14'
 
-      - name: Buscar proyecto
-        shell: bash
+      - name: Comprobar Gradle
         run: |
-          echo "Buscando build.gradle..."
-          find . -name "build.gradle" -o -name "build.gradle.kts"
+          gradle --version
 
-      - name: Compilar JAR
+      - name: Compilar
         shell: bash
         run: |
-          if [ -f "build.gradle" ]; then
-            gradle build --no-daemon
-          elif [ -f "build.gradle.kts" ]; then
-            gradle build --no-daemon
-          else
-            echo "ERROR: No se encontró build.gradle ni build.gradle.kts"
+          if [ ! -f build.gradle ] && [ ! -f build.gradle.kts ]; then
+            echo "ERROR: El proyecto no tiene build.gradle."
+            echo "No se puede compilar el mod solamente con archivos Java."
+            echo "Necesitas el proyecto NeoForge/MDK completo."
             exit 1
           fi
+
+          gradle build --no-daemon
 
       - name: Buscar JAR
         shell: bash
         run: |
-          find . -type f -name "*.jar" -print
+          mkdir -p dist
+
+          find . -type f -path "*/build/libs/*.jar" -exec cp {} dist/ \;
+
+          echo "=== JAR GENERADO ==="
+          ls -lh dist/
 
       - name: Entregar JAR
         uses: actions/upload-artifact@v4
         with:
           name: GalloGiro-NeoForge-1.21.1
-          path: |
-            **/build/libs/*.jar
+          path: dist/*.jar
           if-no-files-found: error
