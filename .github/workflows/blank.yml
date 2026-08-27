@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
@@ -20,36 +21,61 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Buscar proyecto NeoForge
+      - name: Descomprimir proyecto
         shell: bash
         run: |
           set -e
 
           echo "========================================"
-          echo "BUSCANDO PROYECTO NEOFORGE"
+          echo "DESCOMPRIMIENDO GALLOGIRO"
           echo "========================================"
 
-          BUILD_FILE=$(find . -type f | grep -E '/build\.gradle(\.kts)?$' | head -n 1 || true)
+          ZIP=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+
+          if [ -z "$ZIP" ]; then
+            echo "ERROR: No se encontró ningún ZIP."
+            exit 1
+          fi
+
+          echo "ZIP encontrado:"
+          echo "$ZIP"
+
+          mkdir -p proyecto_gallogiro
+
+          unzip -o "$ZIP" -d proyecto_gallogiro
+
+          echo ""
+          echo "ZIP descomprimido correctamente."
+
+          echo ""
+          echo "Buscando build.gradle..."
+
+          BUILD_FILE=$(find proyecto_gallogiro -type f | grep -E '/build\.gradle(\.kts)?$' | head -n 1 || true)
 
           if [ -z "$BUILD_FILE" ]; then
-            echo "ERROR: No se encontró build.gradle."
+            echo "ERROR: El ZIP no contiene build.gradle."
             echo ""
-            echo "Buscando archivos del proyecto..."
-            find . -maxdepth 6 -type f | grep -v '/.git/' | head -n 200
+            find proyecto_gallogiro -maxdepth 8 -type f | head -n 300
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$BUILD_FILE")
 
-          echo "Build encontrado:"
+          echo ""
+          echo "========================================"
+          echo "PROYECTO ENCONTRADO"
+          echo "========================================"
+
+          echo "BUILD:"
           echo "$BUILD_FILE"
 
-          echo "Carpeta del proyecto:"
+          echo ""
+          echo "CARPETA:"
           echo "$PROJECT_DIR"
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Verificar proyecto
+      - name: Verificar proyecto NeoForge
         shell: bash
         run: |
           set -e
@@ -57,7 +83,7 @@ jobs:
           cd "$PROJECT_DIR"
 
           echo "========================================"
-          echo "PROYECTO ENCONTRADO"
+          echo "VERIFICANDO PROYECTO"
           echo "========================================"
 
           pwd
@@ -67,8 +93,12 @@ jobs:
           ls -la
 
           echo ""
-          echo "Build:"
-          ls -l build.gradle build.gradle.kts 2>/dev/null || true
+          echo "build.gradle:"
+          ls -lh build.gradle 2>/dev/null || true
+
+          echo ""
+          echo "gradlew:"
+          ls -lh gradlew 2>/dev/null || true
 
       - name: Preparar Gradle
         shell: bash
@@ -78,11 +108,11 @@ jobs:
           cd "$PROJECT_DIR"
 
           if [ -f "./gradlew" ]; then
-            echo "Usando Gradle Wrapper"
+            echo "Gradle Wrapper encontrado."
             chmod +x ./gradlew
             ./gradlew --version
           else
-            echo "No existe gradlew."
+            echo "Gradle Wrapper no encontrado."
             echo "Instalando Gradle..."
 
             sudo apt-get update
@@ -113,16 +143,22 @@ jobs:
       - name: Mostrar JAR generado
         shell: bash
         run: |
+          set -e
+
           echo "========================================"
           echo "JAR GENERADO"
           echo "========================================"
 
-          if [ -d "$PROJECT_DIR/build/libs" ]; then
-            ls -lah "$PROJECT_DIR/build/libs/"
-          else
-            echo "ERROR: No existe build/libs"
+          if [ ! -d "$PROJECT_DIR/build/libs" ]; then
+            echo "ERROR: No existe la carpeta build/libs."
             exit 1
           fi
+
+          ls -lah "$PROJECT_DIR/build/libs/"
+
+          echo ""
+          echo "JAR:"
+          find "$PROJECT_DIR/build/libs" -type f -name "*.jar"
 
       - name: Subir JAR a Artifacts
         uses: actions/upload-artifact@v4
