@@ -1,4 +1,4 @@
-name: Construir GalloGiro NeoForge 1.21.1
+name: Construir GalloGiro
 
 on:
   push:
@@ -14,38 +14,34 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
-      - name: Descomprimir proyecto
+      - name: Descomprimir ZIP
         run: |
           ZIP=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
 
           if [ -z "$ZIP" ]; then
-            echo "ERROR: No se encontró el ZIP"
+            echo "ERROR: No se encontró ningún ZIP."
             exit 1
           fi
 
-          echo "ZIP: $ZIP"
           mkdir -p proyecto
           unzip -o "$ZIP" -d proyecto
 
-      - name: Encontrar proyecto
+      - name: Encontrar proyecto NeoForge
         run: |
-          PROJECT=$(find proyecto -type f \
-            -name "build.gradle" -o -name "build.gradle.kts" \
-            -print -quit)
+          PROJECT=$(find proyecto -type f -name "build.gradle" -print -quit)
 
           if [ -z "$PROJECT" ]; then
-            echo "ERROR: No se encontró build.gradle"
+            echo "ERROR: No se encontró build.gradle."
             find proyecto -maxdepth 5 -type f
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$PROJECT")
-
-          echo "Proyecto encontrado: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Proyecto: $PROJECT_DIR"
 
       - name: Configurar Java 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
@@ -55,22 +51,20 @@ jobs:
         with:
           gradle-version: "8.14"
 
-      - name: Compilar GalloGiro
+      - name: Compilar NeoForge
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           gradle clean build --no-daemon
 
       - name: Buscar JAR
         run: |
-          JAR=$(find "$PROJECT_DIR/build/libs" \
-            -type f \
-            -name "*.jar" \
+          JAR=$(find "$PROJECT_DIR/build/libs" -type f -name "*.jar" \
             ! -name "*-sources.jar" \
             ! -name "*-javadoc.jar" \
             | head -n 1)
 
           if [ -z "$JAR" ]; then
-            echo "ERROR: No se encontró el JAR"
+            echo "ERROR: No se encontró ningún JAR."
             find "$PROJECT_DIR/build" -type f
             exit 1
           fi
@@ -79,4 +73,7 @@ jobs:
           cp "$JAR" GalloGiro-NeoForge-1.21.1.jar
 
       - name: Subir JAR
-        uses: actions/upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-NeoForge-1.21.1
+          path: GalloGiro-NeoForge-1.21.1.jar
