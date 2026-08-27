@@ -1,10 +1,10 @@
-name: Compilar GalloGiro
+name: Build NeoForge Mod
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,68 +15,117 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configurar Java 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "21"
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Buscar proyecto
+        shell: bash
+        run: |
+          set -e
+
+          echo "Contenido del repositorio:"
+          find . -maxdepth 4 -type f \
+            ! -path './.git/*' \
+            -print
+
+          PROJECT_DIR=""
+
+          # Buscar build.gradle
+          while IFS= read -r file; do
+            if [ -n "$file" ]; then
+              PROJECT_DIR="$(dirname "$file")"
+              break
+            fi
+          done < <(
+            find . \
+              -type f \
+              -name "build.gradle" \
+              ! -path "./.git/*" \
+              -print
+          )
+
+          # Buscar build.gradle.kts si no existe build.gradle
+          if [ -z "$PROJECT_DIR" ]; then
+            while IFS= read -r file; do
+              if [ -n "$file" ]; then
+                PROJECT_DIR="$(dirname "$file")"
+                break
+              fi
+            done < <(
+              find . \
+                -type f \
+                -name "build.gradle.kts" \
+                ! -path "./.git/*" \
+                -print
+            )
+          fi
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: No se encontró build.gradle ni build.gradle.kts."
+            echo "El proyecto NeoForge debe contener los archivos Gradle."
+            exit 1
+          fi
+
+          PROJECT_DIR="${PROJECT_DIR#./}"
+
+          if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "." ]; then
+            PROJECT_DIR="."
+          fi
+
+          echo "Proyecto encontrado en: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.14"
+          gradle-version: '8.14'
 
-      - name: Mostrar archivos del repositorio
-        shell: bash
-        run: |
-          set -e
-          echo "===== ARCHIVOS DEL REPOSITORIO ====="
-          ls -la
-          echo ""
-          echo "===== TODOS LOS ARCHIVOS ====="
-          find . -maxdepth 5 -type f -print
-
-      - name: Buscar proyecto Gradle
+      - name: Preparar Gradle
         shell: bash
         run: |
           set -e
 
-          PROJECT_DIR=""
+          cd "$PROJECT_DIR"
 
-          if [ -f "proyecto/gallo_ready/build.gradle" ]; then
-            PROJECT_DIR="proyecto/gallo_ready"
-          elif [ -f "proyecto/gallo_ready/build.gradle.kts" ]; then
-            PROJECT_DIR="proyecto/gallo_ready"
-          elif [ -f "gallo_ready/build.gradle" ]; then
-            PROJECT_DIR="gallo_ready"
-          elif [ -f "gallo_ready/build.gradle.kts" ]; then
-            PROJECT_DIR="gallo_ready"
-          elif [ -f "build.gradle" ]; then
-            PROJECT_DIR="."
-          elif [ -f "build.gradle.kts" ]; then
-            PROJECT_DIR="."
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            echo "Se encontró gradlew."
+          else
+            echo "No existe gradlew."
+            echo "Se utilizará Gradle instalado."
           fi
-
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: El proyecto no tiene build.gradle."
-            echo "Necesitamos agregar los archivos Gradle al proyecto."
-            exit 1
-          fi
-
-          echo "Proyecto encontrado:"
-          echo "$PROJECT_DIR"
-
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Compilar NeoForge
         shell: bash
         run: |
           set -e
+
           cd "$PROJECT_DIR"
 
-          echo "Compilando GalloGiro..."
-          gradle clean build --no-daemon --stacktrace
+          if [ -f "./gradlew" ]; then
+            ./gradlew clean build --no-daemon --stacktrace
+          else
+            gradle clean build --no-daemon --stacktrace
+          fi
 
       - name: Buscar JAR
         shell: bash
         run: |
           set -e
+
+          echo "Buscando archivos JAR..."
+
+          find "$PROJECT_DIR" \
+            -type f \
+            -path "*/build/libs/*.jar" \
+            -print
+
+      - name: Subir JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-NeoForge-1.21.1
+          path: '**/build/libs/*.jar'
+          if-no-files-found: error
