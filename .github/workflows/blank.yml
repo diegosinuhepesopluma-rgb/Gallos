@@ -3,11 +3,14 @@ name: Generar JAR NeoForge 1.21.1
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
+
+permissions:
+  contents: read
 
 jobs:
   build:
+    name: Generar JAR
     runs-on: ubuntu-latest
 
     steps:
@@ -15,61 +18,51 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configurar Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
+          distribution: temurin
           java-version: '21'
-          distribution: 'temurin'
           cache: gradle
 
-      - name: Buscar proyecto NeoForge
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.12.1'
+
+      - name: Verificar proyecto NeoForge
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
+          echo '=== GALLOGIRO NEOFORGE 1.21.1 ==='
+          echo "Directorio: $(pwd)"
+          test -f build.gradle
+          test -f settings.gradle
+          test -f gradle.properties
+          test -d src/main/java
+          test -d src/main/resources
+          echo 'Proyecto Gradle encontrado correctamente en la raíz.'
+          echo 'No se descomprimirá ningún ZIP dentro del proyecto.'
 
-          echo "=== BUSCANDO PROYECTO ==="
-
-          PROJECT=""
-
-          if [ -f "./gradlew" ]; then
-            PROJECT="."
-          else
-            PROJECT=$(find . -type f -name "gradlew" -print -quit | xargs -r dirname)
-          fi
-
-          if [ -z "$PROJECT" ]; then
-            echo "ERROR: No se encontró gradlew."
-            echo "Archivos Gradle encontrados:"
-            find . -type f \( -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle" -o -name "settings.gradle.kts" \) -print
-            exit 1
-          fi
-
-          echo "Proyecto encontrado en: $PROJECT"
-          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
-
-      - name: Dar permisos a Gradle
+      - name: Compilar JAR NeoForge 1.21.1
         shell: bash
         run: |
-          set -e
-          chmod +x "$PROJECT/gradlew"
+          set -euo pipefail
+          gradle clean build --no-daemon --stacktrace
 
-      - name: Compilar JAR
+      - name: Verificar JAR generado
         shell: bash
         run: |
-          set -e
-          cd "$PROJECT"
-          ./gradlew build --no-daemon
-
-      - name: Mostrar JAR generado
-        shell: bash
-        run: |
-          set -e
-          echo "=== JAR GENERADO ==="
-          find "$PROJECT/build/libs" -type f -name "*.jar" -print
+          set -euo pipefail
+          echo '=== JAR GENERADO ==='
+          find build/libs -maxdepth 1 -type f -name '*.jar' -print
+          JAR="$(find build/libs -maxdepth 1 -type f -name '*.jar' -print -quit)"
+          test -n "$JAR"
+          echo "JAR: $JAR"
 
       - name: Entregar JAR
         uses: actions/upload-artifact@v4
         with:
           name: GalloGiro-NeoForge-1.21.1
-          path: |
-            ${{ env.PROJECT }}/build/libs/*.jar
+          path: build/libs/*.jar
           if-no-files-found: error
+          retention-days: 30
