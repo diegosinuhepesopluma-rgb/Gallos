@@ -11,55 +11,63 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
       - name: Configurar Java 21
         uses: actions/setup-java@v5
         with:
+          distribution: temurin
           java-version: '21'
-          distribution: 'temurin'
+          cache: 'none'
 
       - name: Descomprimir proyecto
         shell: bash
         run: |
           set -e
 
-          echo "======================================"
+          echo "=============================="
           echo "DESCOMPRIMIENDO GALLOGIRO"
-          echo "======================================"
+          echo "=============================="
 
-          ZIP_FILE="GalloGiro_GITHUB_COMPLETO.zip"
+          ZIP="GalloGiro_GITHUB_COMPLETO.zip"
 
-          if [ ! -f "$ZIP_FILE" ]; then
-            echo "ERROR: No se encontró:"
-            echo "$ZIP_FILE"
-            echo ""
-            echo "Archivos del repositorio:"
-            find . -maxdepth 2 -type f -print
+          if [ ! -f "$ZIP" ]; then
+            echo "ERROR: No existe $ZIP"
+            echo "Archivos disponibles:"
+            find . -maxdepth 2 -type f
             exit 1
           fi
 
           rm -rf proyecto_gallogiro
+
           mkdir -p proyecto_gallogiro
 
-          unzip -o "$ZIP_FILE" -d proyecto_gallogiro
+          unzip -q "$ZIP" -d proyecto_gallogiro
 
-          echo ""
-          echo "Buscando build.gradle..."
+          echo "Proyecto descomprimido:"
+          find proyecto_gallogiro -maxdepth 3 -type f | head -100
 
-          BUILD_FILE=$(find proyecto_gallogiro \
-            -type f \
-            -name "build.gradle" \
-            -print -quit)
+      - name: Buscar proyecto NeoForge
+        shell: bash
+        run: |
+          set -e
 
-          if [ -z "$BUILD_FILE" ]; then
-            BUILD_FILE=$(find proyecto_gallogiro \
-              -type f \
-              -name "build.gradle.kts" \
-              -print -quit)
+          echo "=============================="
+          echo "BUSCANDO PROYECTO NEOFORGE"
+          echo "=============================="
+
+          PROJECT=$(find proyecto_gallogiro -type f -name "build.gradle" -print -quit)
+
+          if [ -z "$PROJECT" ]; then
+            echo "ERROR: No se encontró build.gradle"
+            find proyecto_gallogiro -type f | head -200
+            exit 1
           fi
 
-          if [ -z "$BUILD_FILE" ]; then
-            echo "ERROR: No
+          PROJECT_DIR=$(dirname "$PROJECT")
+
+          echo "build.gradle encontrado:"
+          echo "$PROJECT"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB
