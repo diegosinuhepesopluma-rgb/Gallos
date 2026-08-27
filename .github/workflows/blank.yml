@@ -1,4 +1,4 @@
-name: Compilar y generar JAR
+name: Compilar GalloGiro
 
 on:
   push:
@@ -21,45 +21,40 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
 
-      - name: Encontrar proyecto NeoForge
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "8.12.1"
+          cache-disabled: true
+
+      - name: Buscar proyecto NeoForge
         shell: bash
         run: |
           set -e
 
-          echo "Buscando proyecto NeoForge..."
+          PROJECT_DIR=""
 
-          if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
-            PROJECT_DIR="$GITHUB_WORKSPACE"
-          else
-            ZIP_FILE=$(find "$GITHUB_WORKSPACE" -maxdepth 2 -type f -name '*.zip' -print -quit)
+          FILE=$(find . -type f \
+            \( -name "build.gradle" -o -name "build.gradle.kts" \) \
+            -print -quit)
 
-            if [ -z "$ZIP_FILE" ]; then
-              echo "ERROR: No se encontró build.gradle ni un ZIP del proyecto."
-              find "$GITHUB_WORKSPACE" -maxdepth 3 -type f -print
-              exit 1
-            fi
-
-            echo "ZIP encontrado: $ZIP_FILE"
-
-            rm -rf "$GITHUB_WORKSPACE/project"
-            mkdir -p "$GITHUB_WORKSPACE/project"
-
-            unzip -q "$ZIP_FILE" -d "$GITHUB_WORKSPACE/project"
-
-            PROJECT_DIR=$(find "$GITHUB_WORKSPACE/project" \
-              -type f \( -name 'build.gradle' -o -name 'build.gradle.kts' \) \
-              -print -quit | xargs -r dirname)
-
-            if [ -z "$PROJECT_DIR" ]; then
-              echo "ERROR: El ZIP no contiene build.gradle ni build.gradle.kts."
-              find "$GITHUB_WORKSPACE/project" -maxdepth 5 -type f -print
-              exit 1
-            fi
+          if [ -n "$FILE" ]; then
+            PROJECT_DIR="$(dirname "$FILE")"
           fi
 
-          echo "Proyecto encontrado en: $PROJECT_DIR"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: No se encontró build.gradle."
+            find . -maxdepth 6 -type f | sort
+            exit 1
+          fi
+
+          PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+
+          echo "Proyecto encontrado:"
+          echo "$PROJECT_DIR"
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Comprobar proyecto
@@ -69,22 +64,15 @@ jobs:
           cd "$PROJECT_DIR"
 
           echo "=============================="
-          echo "PROYECTO GALLO GIRO"
+          echo "GALLOGIRO NEFORGE 1.21.1"
           echo "=============================="
 
-          pwd
-
-          echo "Archivos principales:"
           ls -la
 
-          test -f build.gradle || test -f build.gradle.kts
-
-          echo "build.gradle encontrado correctamente."
-
-      - name: Preparar Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.12.1'
+          if [ ! -f "build.gradle" ] && [ ! -f "build.gradle.kts" ]; then
+            echo "ERROR: No existe build.gradle."
+            exit 1
+          fi
 
       - name: Compilar NeoForge
         shell: bash
@@ -93,7 +81,7 @@ jobs:
           cd "$PROJECT_DIR"
 
           echo "=============================="
-          echo "COMPILANDO NEFORGE 1.21.1"
+          echo "COMPILANDO"
           echo "=============================="
 
           gradle clean build --no-daemon --stacktrace
@@ -102,28 +90,34 @@ jobs:
         shell: bash
         run: |
           set -e
-          cd "$PROJECT_DIR"
 
-          JAR_FILE=$(find build/libs \
-            -maxdepth 1 \
-            -type f \
-            -name '*.jar' \
-            ! -name '*-sources.jar' \
-            ! -name '*-javadoc.jar' \
-            -print -quit)
+          mkdir -p "$GITHUB_WORKSPACE/dist"
 
-          if [ -z "$JAR_FILE" ]; then
-            echo "ERROR: No se encontró ningún JAR."
-            find build -type f -name '*.jar' -print || true
+          FOUND=0
+
+          while IFS= read -r -d '' JAR; do
+            echo "JAR encontrado: $JAR"
+            cp "$JAR" "$GITHUB_WORKSPACE/dist/"
+            FOUND=1
+          done < <(
+            find "$PROJECT_DIR/build/libs" \
+              -maxdepth 1 \
+              -type f \
+              -name "*.jar" \
+              ! -name "*-sources.jar" \
+              ! -name "*-javadoc.jar" \
+              -print0
+          )
+
+          if [ "$FOUND" -eq 0 ]; then
+            echo "ERROR: No se generó ningún JAR."
+            ls -la "$PROJECT_DIR/build/libs" || true
             exit 1
           fi
 
-          echo "JAR generado: $JAR_FILE"
-          echo "JAR_FILE=$JAR_FILE" >> "$GITHUB_ENV"
-
-      - name: Subir JAR
+      - name: Guardar JAR
         uses: actions/upload-artifact@v4
         with:
-          name: GalloGiro-NeoForge-1.21.1
-          path: ${{ env.JAR_FILE }}
+          name: GalloGiro-NeoForge-1.21.1-JAR
+          path: dist/*.jar
           if-no-files-found: error
