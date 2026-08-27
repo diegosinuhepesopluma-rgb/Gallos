@@ -27,25 +27,22 @@ jobs:
           gradle-version: '8.14'
 
       - name: Encontrar proyecto
+        shell: bash
         run: |
-          PROJECT_DIR=$(find . -type f -name "build.gradle" -not -path "*/build/*" -print -quit | xargs dirname)
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "No se encontró build.gradle"
+          set -e
+
+          if [ -f "proyecto/gallo_ready/build.gradle" ]; then
+            PROJECT_DIR="proyecto/gallo_ready"
+          elif [ -f "gallo_ready/build.gradle" ]; then
+            PROJECT_DIR="gallo_ready"
+          elif [ -f "build.gradle" ]; then
+            PROJECT_DIR="."
+          else
+            echo "ERROR: No se encontró build.gradle"
+            echo ""
+            echo "Buscando archivos Gradle:"
+            find . -type f -name "build.gradle" -o -name "build.gradle.kts" -print
             exit 1
           fi
-          echo "Proyecto: $PROJECT_DIR"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Compilar NeoForge
-        run: |
-          cd "$PROJECT_DIR"
-          gradle clean build --no-daemon --stacktrace
-
-      - name: Buscar JAR
-        run: |
-          find "$PROJECT_DIR/build/libs" -type f -name "*.jar"
-
-      - name: Subir JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: GalloGiro-NeoForge-1.21.
+          echo "Proyecto
