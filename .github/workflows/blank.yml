@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
@@ -30,26 +29,23 @@ jobs:
           echo "BUSCANDO PROYECTO NEOFORGE"
           echo "========================================"
 
-          BUILD_FILE=$(find . \
-            -type f \
-            -name "build.gradle" -o -name "build.gradle.kts" \
-            -not -path "./.git/*" \
-            | head -n 1)
+          BUILD_FILE=$(find . -type f | grep -E '/build\.gradle(\.kts)?$' | head -n 1 || true)
 
           if [ -z "$BUILD_FILE" ]; then
             echo "ERROR: No se encontró build.gradle."
             echo ""
-            echo "Archivos del repositorio:"
-            find . -maxdepth 5 -type f \
-              -not -path "./.git/*" \
-              | head -n 200
+            echo "Buscando archivos del proyecto..."
+            find . -maxdepth 6 -type f | grep -v '/.git/' | head -n 200
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$BUILD_FILE")
 
-          echo "BUILD: $BUILD_FILE"
-          echo "PROYECTO: $PROJECT_DIR"
+          echo "Build encontrado:"
+          echo "$BUILD_FILE"
+
+          echo "Carpeta del proyecto:"
+          echo "$PROJECT_DIR"
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
@@ -61,18 +57,18 @@ jobs:
           cd "$PROJECT_DIR"
 
           echo "========================================"
-          echo "PROYECTO NEOFORGE ENCONTRADO"
+          echo "PROYECTO ENCONTRADO"
           echo "========================================"
 
           pwd
 
           echo ""
-          echo "Contenido:"
+          echo "Archivos:"
           ls -la
 
           echo ""
           echo "Build:"
-          ls -l build.gradle* 2>/dev/null || true
+          ls -l build.gradle build.gradle.kts 2>/dev/null || true
 
       - name: Preparar Gradle
         shell: bash
@@ -82,8 +78,8 @@ jobs:
           cd "$PROJECT_DIR"
 
           if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
             echo "Usando Gradle Wrapper"
+            chmod +x ./gradlew
             ./gradlew --version
           else
             echo "No existe gradlew."
@@ -103,4 +99,34 @@ jobs:
           cd "$PROJECT_DIR"
 
           echo "========================================"
-          echo "COMPILANDO GALLOG
+          echo "COMPILANDO GALLOGIRO"
+          echo "NEOFORGE 1.21.1"
+          echo "========================================"
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew clean build --no-daemon --stacktrace
+          else
+            gradle clean build --no-daemon --stacktrace
+          fi
+
+      - name: Mostrar JAR generado
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "JAR GENERADO"
+          echo "========================================"
+
+          if [ -d "$PROJECT_DIR/build/libs" ]; then
+            ls -lah "$PROJECT_DIR/build/libs/"
+          else
+            echo "ERROR: No existe build/libs"
+            exit 1
+          fi
+
+      - name: Subir JAR a Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-NeoForge-1.21.1
+          path: "${{ env.PROJECT_DIR }}/build/libs/*.jar"
+          if-no-files-found: error
