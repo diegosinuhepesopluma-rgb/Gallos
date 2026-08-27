@@ -1,17 +1,17 @@
 name: Compilar y generar JAR
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build:
+    name: Compilar NeoForge
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
@@ -26,25 +26,34 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y unzip
 
-      - name: Buscar ZIP del proyecto
+      - name: Buscar y extraer proyecto
         shell: bash
         run: |
           set -e
 
           echo "=============================="
-          echo "BUSCANDO ZIP DEL PROYECTO"
+          echo "BUSCANDO PROYECTO"
           echo "=============================="
 
-          ZIP_FILE=$(find . -type f -name "*.zip" \
+          ZIP_FILE=$(find . \
+            -type f \
+            -name "*.zip" \
             -not -path "./.git/*" \
             -print -quit)
 
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No se encontró ningún ZIP."
-            exit 1
+          if [ -n "$ZIP_FILE" ]; then
+            echo "ZIP encontrado: $ZIP_FILE"
+
+            mkdir -p project_extract
+            unzip -q "$ZIP_FILE" -d project_extract
+
+            echo "ZIP extraído."
+          else
+            echo "No se encontró ZIP."
+            echo "Se utilizará directamente el repositorio."
           fi
 
-          echo "ZIP encontrado:"
-          echo "$ZIP_FILE"
-
-         
+      - name: Encontrar proyecto NeoForge
+        shell: bash
+        run: |
+          set -
