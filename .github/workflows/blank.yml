@@ -1,4 +1,4 @@
-name: Build GalloGiro
+name: Build GalloGiro NeoForge
 
 on:
   workflow_dispatch:
@@ -31,7 +31,7 @@ jobs:
           ZIP=$(ls *.zip 2>/dev/null | head -n 1 || true)
 
           if [ -z "$ZIP" ]; then
-            echo "ERROR: No hay ningún ZIP en el repositorio."
+            echo "ERROR: No se encontró ningún ZIP."
             exit 1
           fi
 
@@ -43,41 +43,28 @@ jobs:
         run: |
           set -e
 
-          PROJECT_DIR=""
-
-          for dir in \
-            "proyecto" \
-            "proyecto/gallo_ready" \
-            "proyecto/project/gallo_ready"
-          do
-            if [ -f "$dir/build.gradle" ] || [ -f "$dir/build.gradle.kts" ]; then
-              PROJECT_DIR="$dir"
-              break
-            fi
-          done
-
-          if [ -z "$PROJECT_DIR" ]; then
+          if [ -f "proyecto/build.gradle" ]; then
+            PROJECT_DIR="proyecto"
+          elif [ -f "proyecto/gallo_ready/build.gradle" ]; then
+            PROJECT_DIR="proyecto/gallo_ready"
+          elif [ -f "proyecto/project/gallo_ready/build.gradle" ]; then
+            PROJECT_DIR="proyecto/project/gallo_ready"
+          else
             echo "ERROR: No se encontró build.gradle."
-            echo ""
-            echo "Contenido del ZIP:"
+            echo "Archivos encontrados:"
             ls -R proyecto
             exit 1
           fi
 
-          echo "Proyecto NeoForge:"
+          echo "Proyecto encontrado:"
           echo "$PROJECT_DIR"
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Dar permisos a Gradle
-        shell: bash
-        run: |
-          set -e
-          cd "$PROJECT_DIR"
-
-          if [ -f gradlew ]; then
-            chmod +x gradlew
-          fi
+      - name: Instalar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14'
 
       - name: Compilar NeoForge
         shell: bash
@@ -86,15 +73,12 @@ jobs:
 
           cd "$PROJECT_DIR"
 
-          echo "Compilando..."
-          echo "Directorio: $(pwd)"
+          echo "Directorio:"
+          pwd
 
-          if [ -f gradlew ]; then
-            ./gradlew clean build --no-daemon --stacktrace
-          else
-            echo "ERROR: No existe gradlew."
-            exit 1
-          fi
+          echo "Compilando con Gradle instalado..."
+
+          gradle clean build --no-daemon --stacktrace
 
       - name: Buscar JAR
         shell: bash
@@ -103,22 +87,16 @@ jobs:
 
           mkdir -p salida
 
-          JAR=$(ls "$PROJECT_DIR"/build/libs/*.jar 2>/dev/null | grep -v sources | grep -v javadoc | head -n 1 || true)
+          JAR=$(ls "$PROJECT_DIR"/build/libs/*.jar 2>/dev/null \
+            | grep -v sources \
+            | grep -v javadoc \
+            | head -n 1 || true)
 
           if [ -z "$JAR" ]; then
             echo "ERROR: No se encontró el JAR."
+            echo "Contenido de build/libs:"
             ls -la "$PROJECT_DIR/build/libs" || true
             exit 1
           fi
 
           echo "JAR encontrado:"
-          echo "$JAR"
-
-          cp "$JAR" "salida/GalloGiro-NeoForge-1.21.1.jar"
-
-      - name: Subir JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: GalloGiro-NeoForge-1.21.1
-          path: salida/GalloGiro-NeoForge-1.21.1.jar
-          if-no-files-found: error
