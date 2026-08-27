@@ -12,49 +12,54 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: 📥 Obtener código fuente completo
+      - name: 📥 Obtener código completo
         uses: actions/checkout@v4
 
-      - name: ☕ Configurar Java 21 (versión actualizada)
+      - name: ☕ Java 21 (actualizado)
         uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
+          # ❌ QUITAMOS cache:gradle → falla sin archivos Gradle
 
-      # ❌ ELIMINAMOS el paso problemático de "gradle/actions/setup-gradle" que exige archivos que no tienes
-      - name: 📦 Instalar Gradle manualmente
+      - name: 📦 Instalar Gradle 8.14 manualmente
         run: |
           set -e
           apt update && apt install -y wget unzip
-          wget https://services.gradle.org/distributions/gradle-8.14-bin.zip -P /tmp
+          wget -q https://services.gradle.org/distributions/gradle-8.14-bin.zip -P /tmp
           unzip -q /tmp/gradle-8.14-bin.zip -d /opt
           echo "/opt/gradle-8.14/bin" >> $GITHUB_PATH
+          gradle --version
 
-      - name: 🔨 Verificar archivos del proyecto
+      - name: 📋 Ver qué archivos tienes
+        run: ls -la && echo "--- src ---" && ls -la src/ 2>/dev/null || true
+
+      # ❌ NO PUEDES COMPILAR SI NO EXISTEN build.gradle Y GRADLE
+      - name: ⚠️ Advertencia si falta configuración
         run: |
-          ls -la
-          echo "--- ¿Existe build.gradle? ---"
-          test -f build.gradle && echo "✅ Sí" || echo "❌ NO EXISTE - debes crearlo"
+          if [ ! -f build.gradle ] && [ ! -f build.gradle.kts ]; then
+            echo "❌ ERROR CRÍTICO: No existe build.gradle"
+            echo "Agrega la estructura completa de NeoForge MDK a tu repositorio"
+            exit 1
+          fi
 
-      - name: 🔓 Dar permisos si existe gradlew
-        run: chmod +x gradlew 2>/dev/null || true
-
-      - name: 🔎 Compilar proyecto
+      - name: 🔨 Compilar
         run: |
+          chmod +x gradlew 2>/dev/null || true
           gradle build --no-daemon --stacktrace
 
-      - name: 📂 Recopilar JAR
+      - name: 📂 Extraer JAR
         run: |
           mkdir -p resultado
-          JAR=$(find ./build/libs -name "*.jar" ! -name "*sources*" ! -name "*dev*" | head -n 1)
+          JAR=$(find ./build/libs -maxdepth 3 -type f -name "*.jar" \
+            ! -name "*sources*" ! -name "*javadoc*" ! -name "*dev*" | head -n 1)
           if [ -z "$JAR" ]; then
-            echo "❌ No se generó el JAR"
+            echo "❌ No se generó JAR"
             exit 1
           fi
           cp "$JAR" resultado/
 
-      - name: 📤 Subir artefacto
+      - name: 📤 Subir
         uses: actions/upload-artifact@v4
         with:
           name: GalloGiro-NeoForge-1.21.1
