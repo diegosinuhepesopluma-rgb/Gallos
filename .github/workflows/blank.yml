@@ -1,4 +1,4 @@
-name: GalloGiro - Generar JAR
+name: Compilar GalloGiro NeoForge 1.21.1
 
 on:
   workflow_dispatch:
@@ -11,11 +11,10 @@ permissions:
 
 jobs:
   build:
-    name: Generar JAR NeoForge 1.21.1
+    name: Generar JAR
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
@@ -30,52 +29,37 @@ jobs:
         with:
           gradle-version: '8.12.1'
 
-      - name: Preparar proyecto
+      - name: Verificar proyecto
         shell: bash
         run: |
           set -e
+          echo "=== PROYECTO GALLOGIRO ==="
+          pwd
+          test -f build.gradle
+          test -f settings.gradle
+          test -f gradle.properties
+          test -d src/main/java
+          test -d src/main/resources
+          echo "Proyecto encontrado correctamente en la raíz."
 
-          echo "======================================"
-          echo "PREPARANDO GALLOGIRO"
-          echo "======================================"
+      - name: Compilar JAR NeoForge 1.21.1
+        shell: bash
+        run: |
+          set -e
+          gradle clean build --no-daemon --stacktrace
 
-          mkdir -p "$GITHUB_WORKSPACE/_project"
+      - name: Verificar JAR
+        shell: bash
+        run: |
+          set -e
+          echo "=== JAR GENERADO ==="
+          find build/libs -maxdepth 1 -type f -name "*.jar" -print
+          test -n "$(find build/libs -maxdepth 1 -type f -name "*.jar" -print -quit)"
 
-          ZIP_FILE=""
-
-          for f in "$GITHUB_WORKSPACE"/*.zip; do
-            if [ -f "$f" ]; then
-              ZIP_FILE="$f"
-              break
-            fi
-          done
-
-          if [ -n "$ZIP_FILE" ]; then
-            echo "ZIP encontrado:"
-            echo "$ZIP_FILE"
-
-            unzip -o "$ZIP_FILE" -d "$GITHUB_WORKSPACE/_project"
-          fi
-
-          PROJECT_DIR=""
-
-          while IFS= read -r build_file; do
-            PROJECT_DIR="$(dirname "$build_file")"
-            break
-          done < <(
-            find "$GITHUB_WORKSPACE" \
-              -type f \
-              -name "build.gradle" \
-              -not -path "*/.git/*" \
-              -not -path "*/build/*" \
-              -not -path "*/_project/_project/*"
-          )
-
-          if [ -z "$PROJECT_DIR" ]; then
-            while IFS= read -r build_file; do
-              PROJECT_DIR="$(dirname "$build_file")"
-              break
-            done < <(
-              find "$GITHUB_WORKSPACE" \
-                -type f \
-                -name "
+      - name: Entregar JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-NeoForge-1.21.1
+          path: build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 30
