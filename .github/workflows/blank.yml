@@ -1,9 +1,10 @@
-name: Compilar GalloGiro NeoForge 1.21.1
+name: Compilar JAR
 
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -20,59 +21,59 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: '21'
 
       - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: "8.12.1"
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Encontrar proyecto NeoForge
         shell: bash
         run: |
           set -e
-          PROJECT=""
 
-          if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
-            PROJECT="."
-          else
-            ZIP=$(find . -maxdepth 2 -type f -name '*.zip' | head -n 1 || true)
-
-            if [ -n "$ZIP" ]; then
-              echo "Descomprimiendo $ZIP..."
-              rm -rf _project
-              mkdir -p _project
-              unzip -q "$ZIP" -d _project
-            fi
-
-            PROJECT=$(find . -type f -name 'build.gradle' -o -name 'build.gradle.kts' -print -quit | xargs -r dirname)
-          fi
+          PROJECT=$(find "$GITHUB_WORKSPACE" \
+            -type f \
+            \( -name "build.gradle" -o -name "build.gradle.kts" \) \
+            -not -path "*/build/*" \
+            -print -quit)
 
           if [ -z "$PROJECT" ]; then
-            echo "ERROR: No se encontró build.gradle ni build.gradle.kts."
+            echo "ERROR: No se encontró build.gradle ni build.gradle.kts"
+            echo ""
+            echo "Archivos encontrados:"
+            find "$GITHUB_WORKSPACE" -maxdepth 4 -type f | head -100
             exit 1
           fi
 
-          PROJECT=$(realpath "$PROJECT")
-          echo "Proyecto encontrado en: $PROJECT"
-          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
+          PROJECT_DIR=$(dirname "$PROJECT")
+
+          echo "Proyecto encontrado:"
+          echo "$PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Dar permisos a Gradle
+        shell: bash
+        run: |
+          if [ -f "$PROJECT_DIR/gradlew" ]; then
+            chmod +x "$PROJECT_DIR/gradlew"
+          fi
 
       - name: Compilar JAR
         shell: bash
         run: |
           set -e
-          cd "$PROJECT"
-          gradle clean build --no-daemon --stacktrace
+          cd "$PROJECT_DIR"
 
-      - name: Mostrar JAR generado
-        shell: bash
-        run: |
-          find "$PROJECT/build/libs" -maxdepth 1 -type f -name '*.jar' -print
-          test -n "$(find "$PROJECT/build/libs" -maxdepth 1 -type f -name '*.jar' -print -quit)"
+          if [ -f "./gradlew" ]; then
+            ./gradlew build --no-daemon --stacktrace
+          else
+            gradle build --no-daemon --stacktrace
+          fi
 
       - name: Entregar JAR
         uses: actions/upload-artifact@v4
         with:
           name: GalloGiro-NeoForge-1.21.1
-          path: ${{ env.PROJECT }}/build/libs/*.jar
-         
+          path: ${{ env.PROJECT_DIR }}/build/libs/*.jar
+          if-no-files-found: error
