@@ -1,23 +1,33 @@
-package com.gallogiro.gallogiro.registry;
+name: Compilar JAR
 
-import com.gallogiro.gallogiro.GalloGiro;
-import com.gallogiro.gallogiro.entity.GalloEntity;
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.MobCategory;
-import net.neoforged.neoforge.registries.DeferredRegister;
-import net.neoforged.neoforge.registries.DeferredHolder;
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-public class ModEntities {
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
 
-    public static final DeferredRegister.Entities ENTITY_TYPES =
-            DeferredRegister.createEntities(GalloGiro.MOD_ID);
+      - name: Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
 
-    public static final DeferredHolder<EntityType<?>, EntityType<GalloEntity>> GALLO =
-            ENTITY_TYPES.registerEntityType(
-                    "gallo",
-                    GalloEntity::new,
-                    MobCategory.CREATURE,
-                    builder -> builder.sized(0.6F, 1.0F)
-            );
-}
+      - name: Dar permisos a Gradle
+        run: chmod +x gradlew
+
+      - name: Compilar JAR
+        run: ./gradlew build --no-daemon
+
+      - name: Entregar JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalloGiro-JAR
+          path: build/libs/*.jar
