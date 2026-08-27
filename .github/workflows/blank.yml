@@ -19,42 +19,64 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
 
       - name: Comprobar proyecto
+        shell: bash
         run: |
-          echo "=== PROYECTO ==="
+          set -e
+          echo "=============================="
+          echo "PROYECTO GALLO GIRO"
+          echo "=============================="
           pwd
-          echo "=== ARCHIVOS ==="
+          echo ""
           ls -la
-          echo "=== BUILD.GRADLE ==="
-          test -f build.gradle
-          echo "build.gradle encontrado correctamente"
+          echo ""
+
+          if [ ! -f "build.gradle" ]; then
+            echo "ERROR: No se encontró build.gradle en la raíz."
+            exit 1
+          fi
+
+          echo "OK: build.gradle encontrado."
 
       - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Compilar NeoForge
+        shell: bash
         run: |
-          echo "=== COMPILANDO GALLO GIRO ==="
+          set -e
+          echo "=============================="
+          echo "COMPILANDO NEOFORGE"
+          echo "=============================="
+
           gradle build --no-daemon --stacktrace
-          echo "=== COMPILACION TERMINADA ==="
 
       - name: Buscar JAR
+        shell: bash
         run: |
-          echo "=== JAR GENERADO ==="
-          find build/libs -type f -name "*.jar" -print
-          
-          JAR=$(find build/libs -type f -name "*.jar" ! -name "*-sources.jar" ! -name "*-dev.jar" | head -n 1)
+          set -e
+          echo "=============================="
+          echo "BUSCANDO JAR"
+          echo "=============================="
+
+          ls -la build/libs
+
+          JAR=$(find build/libs -maxdepth 1 -type f -name "*.jar" \
+            ! -name "*-sources.jar" \
+            ! -name "*-dev.jar" \
+            | head -n 1)
 
           if [ -z "$JAR" ]; then
-            echo "ERROR: No se genero ningun JAR"
+            echo "ERROR: No se generó ningún JAR."
             exit 1
           fi
 
-          echo "JAR encontrado: $JAR"
+          echo "JAR encontrado:"
+          echo "$JAR"
+
           mkdir -p release
-          cp "$JAR" release/GalloGiro-NeoForge-1.21.1.jar
+          cp "$JAR" "release/GalloGiro-NeoForge-1.21.1.jar"
 
       - name: Subir JAR
         uses: actions/upload-artifact@v4
