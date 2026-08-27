@@ -1,10 +1,9 @@
-name: Generar JAR
+name: Generar JAR NeoForge 1.21.1
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -20,11 +19,62 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Preparar proyecto
+      - name: Buscar y preparar proyecto
         shell: bash
         run: |
           set -e
 
-          echo "=== PREPARANDO GALLOGIRO ==="
+          echo "=== BUSCANDO PROYECTO GALLOGIRO ==="
 
-         
+          PROJECT_DIR=""
+
+          if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+            PROJECT_DIR="."
+          fi
+
+          for ZIP in ./*.zip; do
+            if [ -f "$ZIP" ]; then
+              echo "Descomprimiendo: $ZIP"
+              mkdir -p proyecto
+              unzip -o "$ZIP" -d proyecto
+
+              if [ -f "proyecto/build.gradle" ] || [ -f "proyecto/build.gradle.kts" ]; then
+                PROJECT_DIR="proyecto"
+                break
+              fi
+            fi
+          done
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: No se encontró build.gradle"
+            exit 1
+          fi
+
+          echo "Proyecto encontrado en: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilar JAR
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          echo "=== COMPILANDO GALLOGIRO ==="
+
+          chmod +x gradlew
+          ./gradlew clean build --no-daemon
+
+      - name: Verificar JAR
+        shell: bash
+        run: |
+          set -e
+
+          echo "=== BUSCANDO JAR ==="
+
+          mkdir -p salida
+
+          JAR=$(find "$PROJECT_DIR/build/libs" -maxdepth 1 -type f -name "*.
