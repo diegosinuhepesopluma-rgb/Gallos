@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
@@ -19,25 +20,24 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+          cache: gradle
 
       - name: Descomprimir proyecto
         shell: bash
         run: |
           set -e
 
-          ZIP=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+          echo "======================================"
+          echo "DESCOMPRIMIENDO GALLOGIRO"
+          echo "======================================"
 
-          if [ -z "$ZIP" ]; then
-            echo "ERROR: No se encontró el ZIP"
+          ZIP_FILE="GalloGiro_GITHUB_COMPLETO.zip"
+
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "ERROR: No existe $ZIP_FILE"
+            echo "Archivos disponibles:"
+            find . -maxdepth 2 -type f -print
             exit 1
           fi
 
-          rm -rf proyecto_gallogiro
-          mkdir proyecto_gallogiro
-
-          unzip -o "$ZIP" -d proyecto_gallogiro
-
-          BUILD_FILE=$(find proyecto_gallogiro -type f -name "build.gradle" | head -n 1)
-
-          if [ -z "$BUILD_FILE" ]; then
-            BUILD_FILE=$(find proyecto_gallog
+          rm -
