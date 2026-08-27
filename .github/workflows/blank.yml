@@ -1,4 +1,4 @@
-name: Compilar NeoForge y generar JAR
+name: Compilar NeoForge
 
 on:
   push:
@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
@@ -26,63 +27,116 @@ jobs:
 
       - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.14'
 
-      - name: Verificar proyecto
+      - name: Preparar proyecto NeoForge
         shell: bash
         run: |
           set -e
 
-          echo "=== GALLOGIRO NEOFORGE 1.21.1 ==="
+          echo "================================="
+          echo "   PREPARANDO PROYECTO GALLOGIRO"
+          echo "================================="
 
-          if [ ! -f build.gradle ]; then
-            echo "ERROR: falta build.gradle en la raíz."
+          mkdir -p proyecto
+
+          # Buscar ZIP del proyecto
+          ZIP=$(find . -maxdepth 3 -type f -iname "*.zip" \
+            -not -path "./.git/*" | head -n 1 || true)
+
+          if [ -n "$ZIP" ]; then
+            echo "ZIP encontrado:"
+            echo "$ZIP"
+
+            unzip -o "$ZIP" -d proyecto
+          fi
+
+          # Buscar build.gradle
+          BUILD=$(find . -type f -name "build.gradle" \
+            -not -path "./.git/*" | head -n 1 || true)
+
+          if [ -z "$BUILD" ]; then
+            echo ""
+            echo "ERROR: No se encontró build.gradle."
+            echo ""
+            echo "Archivos encontrados:"
+            find . -maxdepth 5 -type f | head -n 200
             exit 1
           fi
 
-          if [ ! -f settings.gradle ]; then
-            echo "ERROR: falta settings.gradle en la raíz."
+          PROJECT_DIR=$(dirname "$BUILD")
+
+          echo ""
+          echo "Proyecto NeoForge encontrado en:"
+          echo "$PROJECT_DIR"
+          echo ""
+
+          cd "$PROJECT_DIR"
+
+          echo "Contenido del proyecto:"
+          ls -la
+
+          if [ ! -f build.gradle ]; then
+            echo "ERROR: build.gradle no existe."
             exit 1
           fi
 
           if [ ! -d src ]; then
-            echo "ERROR: falta la carpeta src/"
+            echo "ERROR: no existe la carpeta src."
             exit 1
           fi
 
-          echo "build.gradle: OK"
-          echo "settings.gradle: OK"
-          echo "src/: OK"
+          echo ""
+          echo "Proyecto preparado correctamente."
 
       - name: Compilar NeoForge
         shell: bash
         run: |
           set -e
-          gradle clean build --no-daemon --stacktrace
+
+          BUILD=$(find . -type f -name "build.gradle" \
+            -not -path "./.git/*" | head -n 1)
+
+          PROJECT_DIR=$(dirname "$BUILD")
+
+          cd "$PROJECT_DIR"
+
+          echo "Compilando desde:"
+          pwd
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew clean build --no-daemon --stacktrace
+          else
+            gradle clean build --no-daemon --stacktrace
+          fi
 
       - name: Comprobar JAR
         shell: bash
         run: |
           set -e
 
-          echo "=== JAR GENERADO ==="
+          echo "================================="
+          echo "       JAR GENERADO"
+          echo "================================="
 
-          find build/libs -maxdepth 1 -type f -name "*.jar" -print
+          find . -type f -path "*/build/libs/*.jar" -print
 
-          COUNT=$(find build/libs -maxdepth 1 -type f -name "*.jar" | wc -l)
+          JAR=$(find . -type f -path "*/build/libs/*.jar" | head -n 1 || true)
 
-          if [ "$COUNT" -eq 0 ]; then
-            echo "ERROR: no se generó ningún JAR."
+          if [ -z "$JAR" ]; then
+            echo "ERROR: No se generó ningún JAR."
             exit 1
           fi
 
-          echo "JAR encontrado correctamente."
+          echo ""
+          echo "JAR encontrado:"
+          echo "$JAR"
 
       - name: Subir JAR a Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: GalloGiro-NeoForge-1.21.1-JAR
-          path: build/libs/*.jar
+          path: |
+            **/build/libs/*.jar
           if-no-files-found: error
           retention-days: 30
