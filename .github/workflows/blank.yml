@@ -22,7 +22,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
 
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -41,19 +40,17 @@ jobs:
           test -d src/main/java
           test -d src/main/resources
           echo 'Proyecto Gradle encontrado correctamente en la raíz.'
-          echo 'No se descomprimirá ningún ZIP dentro del proyecto.'
 
       - name: Compilar JAR NeoForge 1.21.1
         shell: bash
         run: |
           set -euo pipefail
-          gradle clean build --no-daemon --stacktrace
+          gradle --no-daemon clean build --stacktrace
 
       - name: Verificar JAR generado
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== JAR GENERADO ==='
           find build/libs -maxdepth 1 -type f -name '*.jar' -print
           JAR="$(find build/libs -maxdepth 1 -type f -name '*.jar' -print -quit)"
           test -n "$JAR"
