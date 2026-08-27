@@ -1,4 +1,4 @@
-name: Build GalloGiro NeoForge
+name: Build NeoForge Mod
 
 on:
   workflow_dispatch:
@@ -20,51 +20,35 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-
-      - name: Buscar y descomprimir ZIP
-        shell: bash
-        run: |
-          set -e
-
-          mkdir -p proyecto
-
-          ZIP=$(ls *.zip 2>/dev/null | head -n 1 || true)
-
-          if [ -z "$ZIP" ]; then
-            echo "ERROR: No se encontró ningún ZIP."
-            exit 1
-          fi
-
-          echo "ZIP encontrado: $ZIP"
-          unzip -o "$ZIP" -d proyecto
-
-      - name: Encontrar proyecto NeoForge
-        shell: bash
-        run: |
-          set -e
-
-          if [ -f "proyecto/build.gradle" ]; then
-            PROJECT_DIR="proyecto"
-          elif [ -f "proyecto/gallo_ready/build.gradle" ]; then
-            PROJECT_DIR="proyecto/gallo_ready"
-          elif [ -f "proyecto/project/gallo_ready/build.gradle" ]; then
-            PROJECT_DIR="proyecto/project/gallo_ready"
-          else
-            echo "ERROR: No se encontró build.gradle."
-            echo "Archivos encontrados:"
-            ls -R proyecto
-            exit 1
-          fi
-
-          echo "Proyecto encontrado:"
-          echo "$PROJECT_DIR"
-
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          cache: gradle
 
       - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14'
+
+      - name: Buscar proyecto NeoForge
+        shell: bash
+        run: |
+          set -e
+
+          echo "Buscando build.gradle..."
+
+          PROJECT_DIR=$(find . -type f -name "build.gradle" -o -name "build.gradle.kts" -not -path "*/build/*" -print -quit | xargs -r dirname)
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: No se encontró build.gradle ni build.gradle.kts."
+            echo "Archivos del repositorio:"
+            find . -maxdepth 5 -type f | head -200
+            exit 1
+          fi
+
+          PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd)
+
+          echo "Proyecto encontrado en:"
+          echo "$PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Compilar NeoForge
         shell: bash
@@ -76,27 +60,17 @@ jobs:
           echo "Directorio:"
           pwd
 
-          echo "Compilando con Gradle instalado..."
+          echo "Contenido:"
+          ls -la
+
+          echo "Versión de Java:"
+          java -version
+
+          echo "Versión de Gradle:"
+          gradle --version
+
+          echo "Compilando mod..."
 
           gradle clean build --no-daemon --stacktrace
 
-      - name: Buscar JAR
-        shell: bash
-        run: |
-          set -e
-
-          mkdir -p salida
-
-          JAR=$(ls "$PROJECT_DIR"/build/libs/*.jar 2>/dev/null \
-            | grep -v sources \
-            | grep -v javadoc \
-            | head -n 1 || true)
-
-          if [ -z "$JAR" ]; then
-            echo "ERROR: No se encontró el JAR."
-            echo "Contenido de build/libs:"
-            ls -la "$PROJECT_DIR/build/libs" || true
-            exit 1
-          fi
-
-          echo "JAR encontrado:"
+      -
