@@ -1,10 +1,13 @@
-name: Compilar Gallo Giro
+name: Compilar y generar JAR
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -17,151 +20,57 @@ jobs:
       - name: Configurar Java 21
         uses: actions/setup-java@v5
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          distribution: temurin
+          java-version: "21"
 
-      - name: Buscar ZIP
+      - name: Buscar proyecto NeoForge
         shell: bash
         run: |
           set -e
 
-          ZIP_FILE=$(python3 -c 'import glob; x=glob.glob("*.zip"); print(x[0] if x else "")')
+          echo "========================================"
+          echo "BUSCANDO PROYECTO GALLO GIRO"
+          echo "========================================"
 
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No se encontró el ZIP del mod."
-            exit 1
-          fi
+          PROJECT_DIR=""
 
-          echo "ZIP encontrado: $ZIP_FILE"
-          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
+          while IFS= read -r -d '' FILE; do
+            DIR="$(dirname "$FILE")"
 
-      - name: Descomprimir proyecto
-        shell: bash
-        run: |
-          set -e
-
-          rm -rf proyecto
-          mkdir -p proyecto
-
-          echo "Descomprimiendo:"
-          echo "$ZIP_FILE"
-
-          unzip -q "$ZIP_FILE" -d proyecto
-
-          echo "ZIP descomprimido correctamente."
-
-      - name: Encontrar proyecto NeoForge
-        shell: bash
-        run: |
-          set -e
-
-          PROJECT_DIR=$(python3 - <<'PY'
-          import os
-
-          for root, dirs, files in os.walk("proyecto"):
-              dirs[:] = [d for d in dirs if d not in [".git", ".gradle"]]
-
-              if "build.gradle" in files or "build.gradle.kts" in files:
-                  print(root)
-                  break
-          PY
+            if [ -f "$DIR/settings.gradle" ] || [ -f "$DIR/settings.gradle.kts" ]; then
+              PROJECT_DIR="$DIR"
+              break
+            fi
+          done < <(
+            find . -type f \
+              -name "build.gradle" -o -name "build.gradle.kts" \
+              -print0
           )
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: No se encontró build.gradle."
+            FILE="$(find . -type f \
+              -name "build.gradle" -o -name "build.gradle.kts" \
+              -print -quit)"
+
+            if [ -n "$FILE" ]; then
+              PROJECT_DIR="$(dirname "$FILE")"
+            fi
+          fi
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: No se encontró un proyecto Gradle."
             echo ""
             echo "Archivos encontrados:"
-            find proyecto -type f
+            find . -maxdepth 6 -type f | sort
             exit 1
           fi
+
+          PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 
           echo "Proyecto encontrado:"
           echo "$PROJECT_DIR"
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
-
-      - name: Comprobar proyecto
-        shell: bash
-        run: |
-          set -e
-
-          echo "=============================="
-          echo "PROYECTO GALLO GIRO"
-          echo "=============================="
-
-          echo "Carpeta:"
-          echo "$PROJECT_DIR"
-
-          echo ""
-          echo "Archivos:"
-          ls -la "$PROJECT_DIR"
-
-          echo ""
-          echo "Versión de Gradle:"
-          gradle --version
-
-      - name: Compilar NeoForge
-        shell: bash
-        run: |
-          set -e
-
-          cd "$PROJECT_DIR"
-
-          echo "=============================="
-          echo "COMPILANDO NEFORGE"
-          echo "=============================="
-
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew build --no-daemon
-          else
-            gradle build --no-daemon
-          fi
-
-      - name: Buscar JAR
-        shell: bash
-        run: |
-          set -e
-
-          echo "=============================="
-          echo "BUSCANDO JAR"
-          echo "=============================="
-
-          JAR_FILE=$(python3 - <<'PY'
-          import os
-
-          project = os.environ["PROJECT_DIR"]
-          libs = os.path.join(project, "build", "libs")
-
-          if not os.path.isdir(libs):
-              raise SystemExit("ERROR: No existe build/libs")
-
-          for name in os.listdir(libs):
-              if name.endswith(".jar") and "-sources" not in name and "-javadoc" not in name:
-                  print(os.path.join(libs, name))
-                  break
-          PY
-          )
-
-          if [ -z "$JAR_FILE" ]; then
-            echo "ERROR: No se encontró el JAR."
-            exit 1
-          fi
-
-          echo "JAR encontrado:"
-          echo "$JAR_FILE"
-
-          mkdir -p salida
-          cp "$JAR_FILE" "salida/GalloGiro-NeoForge-1.21.1.jar"
-
-      - name: Subir JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: GalloGiro-NeoForge-1.21.1
-          path: salida/GalloGiro-NeoForge-1.21.1.jar
-          if-no-files-found: error
+      - name: Preparar Gradle
+        shell:
