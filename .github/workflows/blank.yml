@@ -1,4 +1,4 @@
-name: GalloGiro JAR
+name: GalloGiro 1.21.1
 
 on:
   workflow_dispatch:
@@ -20,14 +20,33 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Descomprimir ZIP
-        run: |
-          mkdir -p proyecto
-          unzip -o "$(find . -maxdepth 1 -name '*.zip' | head -1)" -d proyecto
+      - name: Instalar Gradle 8.12.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.12.1'
 
-      - name: Encontrar proyecto
+      - name: Descomprimir ZIP
+        shell: bash
         run: |
-          BUILD=$(find proyecto -name build.gradle -type f | head -1)
+          set -e
+
+          ZIP=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
+
+          if [ -z "$ZIP" ]; then
+            echo "ERROR: No se encontró el ZIP"
+            exit 1
+          fi
+
+          rm -rf proyecto
+          mkdir proyecto
+          unzip -o "$ZIP" -d proyecto
+
+      - name: Encontrar proyecto NeoForge
+        shell: bash
+        run: |
+          set -e
+
+          BUILD=$(find proyecto -type f -name "build.gradle" -print -quit)
 
           if [ -z "$BUILD" ]; then
             echo "ERROR: No se encontró build.gradle"
@@ -36,22 +55,28 @@ jobs:
           fi
 
           DIR=$(dirname "$BUILD")
+
+          echo "Proyecto encontrado:"
+          echo "$DIR"
+
           echo "DIR=$DIR" >> "$GITHUB_ENV"
-          echo "Proyecto encontrado en: $DIR"
 
-      - name: Preparar Gradle
+      - name: Compilar JAR
+        shell: bash
         run: |
+          set -e
           cd "$DIR"
-          chmod +x gradlew
 
-      - name: Crear JAR
-        run: |
-          cd "$DIR"
-          ./gradlew build --no-daemon
+          echo "=============================="
+          echo "COMPILANDO GALLOGIRO"
+          echo "NEOFORGE 1.21.1"
+          echo "=============================="
+
+          gradle clean build --no-daemon
 
       - name: Entregar JAR
         uses: actions/upload-artifact@v4
         with:
-          name: GalloGiro-1.21.1-JAR
+          name: GalloGiro-NeoForge-1.21.1
           path: ${{ env.DIR }}/build/libs/*.jar
           if-no-files-found: error
