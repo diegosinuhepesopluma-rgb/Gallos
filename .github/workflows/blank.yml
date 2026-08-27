@@ -1,4 +1,4 @@
-name: Generar JAR NeoForge 1.21.1
+name: Generar JAR
 
 on:
   workflow_dispatch:
@@ -25,26 +25,6 @@ jobs:
         run: |
           set -e
 
-          echo "=== BUSCANDO PROYECTO GALLOGIRO ==="
-
-          # Si hay un ZIP del proyecto, descomprimirlo
-          for ZIP in *.zip; do
-            if [ -f "$ZIP" ]; then
-              echo "Descomprimiendo: $ZIP"
-              mkdir -p proyecto
-              unzip -o "$ZIP" -d proyecto
-            fi
-          done
-
-          # Buscar build.gradle
-          BUILD=$(find . -type f -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
-
-          if [ -z "$BUILD" ]; then
-            echo "ERROR: No se encontró build.gradle."
-            find . -maxdepth 4 -type f | head -100
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$BUILD")
+          echo "=== PREPARANDO GALLOGIRO ==="
 
          
