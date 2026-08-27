@@ -1,4 +1,4 @@
-name: Compilar GalloGiro NeoForge 1.21.1
+name: GalloGiro NeoForge 1.21.1
 
 on:
   push:
@@ -23,25 +23,51 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: "8.12.1"
+      - name: Encontrar proyecto
+        id: proyecto
+        shell: bash
+        run: |
+          PROJECT=$(find . -type f -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
+
+          if [ -z "$PROJECT" ]; then
+            echo "ERROR: No se encontró build.gradle ni build.gradle.kts"
+            find . -maxdepth 3 -type f | head -100
+            exit 1
+          fi
+
+          DIR=$(dirname "$PROJECT")
+          echo "Proyecto encontrado en: $DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Dar permisos a Gradle
+        working-directory: ${{ steps.proyecto.outputs.dir }}
+        run: |
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+          fi
 
       - name: Compilar GalloGiro
-        working-directory: gallo_ready
+        working-directory: ${{ steps.proyecto.outputs.dir }}
         run: |
-          gradle clean build --no-daemon --stacktrace
+          if [ -f gradlew ]; then
+            ./gradlew clean build --no-daemon
+          else
+            gradle clean build --no-daemon
+          fi
 
       - name: Buscar JAR
         run: |
-          echo "JAR encontrados:"
-          find gallo_ready/build/libs -type f -name "*.jar" -print
-          test -n "$(find gallo_ready/build/libs -type f -name "*.jar" -print -quit)"
+          echo "JAR generados:"
+          find . -type f -path "*/build/libs/*.jar" -print
+
+          if ! find . -type f -path "*/build/libs/*.jar" | grep -q .; then
+            echo "ERROR: No se generó ningún JAR."
+            exit 1
+          fi
 
       - name: Subir JAR
         uses: actions/upload-artifact@v4
         with:
           name: GalloGiro-NeoForge-1.21.1
-          path: gallo_ready/build/libs/*.jar
+          path: "**/build/libs/*.jar"
           if-no-files-found: error
