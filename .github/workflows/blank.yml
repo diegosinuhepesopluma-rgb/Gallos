@@ -1,4 +1,4 @@
-name: Crear JAR GalloGiro
+name: Build NeoForge Mod
 
 on:
   push:
@@ -6,39 +6,68 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    name: Compilar y generar JAR
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
       - name: Configurar Java 21
         uses: actions/setup-java@v5
         with:
+          distribution: temurin
           java-version: '21'
-          distribution: 'temurin'
 
       - name: Buscar y descomprimir ZIP
         shell: bash
         run: |
           set -e
-          echo "Buscando ZIP..."
 
-          ZIP=$(find . -type f -name "*.zip" -not -path "./.git/*" | head -n 1)
+          echo "Buscando archivos ZIP..."
 
-          if [ -z "$ZIP" ]; then
-            echo "No se encontró ZIP."
+          shopt -s nullglob
+          for zipfile in *.zip; do
+            echo "Descomprimiendo: $zipfile"
+            unzip -o "$zipfile" -d extracted
+          done
+
+          if [ -d "extracted" ]; then
+            cp -r extracted/. .
+          fi
+
+          echo "Archivos encontrados:"
+          find . -maxdepth 4 -type f \
+            ! -path './.git/*' \
+            ! -path './.github/*' \
+            | head -200
+
+      - name: Encontrar proyecto NeoForge
+        shell: bash
+        run: |
+          set -e
+
+          PROJECT_DIR="$(find . \
+            -type f \
+            -name "build.gradle" \
+            -not -path "./.git/*" \
+            -not -path "./build/*" \
+            -print -quit)"
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: No se encontró build.gradle."
+            echo "El repositorio debe contener el proyecto NeoForge."
             exit 1
           fi
 
-          echo "ZIP encontrado: $ZIP"
+          PROJECT_DIR="$(dirname "$PROJECT_DIR")"
 
-          mkdir -p proyecto
-          unzip -o "$ZIP" -d proyecto
+          echo "Proyecto encontrado en:"
+          echo "$PROJECT_DIR"
 
-          echo "ZIP descomprimido."
-
-      -
+          echo "PROJECT_DIR=$PROJECT_DIR" >>
