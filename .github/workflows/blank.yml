@@ -8,7 +8,6 @@ on:
 
 jobs:
   build:
-    name: Compilar NeoForge
     runs-on: ubuntu-latest
 
     steps:
@@ -18,42 +17,26 @@ jobs:
       - name: Configurar Java 21
         uses: actions/setup-java@v5
         with:
+          distribution: temurin
           java-version: '21'
-          distribution: 'temurin'
+          cache: gradle
 
-      - name: Instalar herramientas
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip
-
-      - name: Buscar y extraer proyecto
+      - name: Buscar proyecto NeoForge
         shell: bash
         run: |
           set -e
 
-          echo "=============================="
-          echo "BUSCANDO PROYECTO"
-          echo "=============================="
+          PROJECT_DIR=""
 
-          ZIP_FILE=$(find . \
-            -type f \
-            -name "*.zip" \
-            -not -path "./.git/*" \
-            -print -quit)
-
-          if [ -n "$ZIP_FILE" ]; then
-            echo "ZIP encontrado: $ZIP_FILE"
-
-            mkdir -p project_extract
-            unzip -q "$ZIP_FILE" -d project_extract
-
-            echo "ZIP extraído."
+          if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+            PROJECT_DIR="$GITHUB_WORKSPACE"
           else
-            echo "No se encontró ZIP."
-            echo "Se utilizará directamente el repositorio."
+            PROJECT_DIR=$(find "$GITHUB_WORKSPACE" \
+              -type f -name "build.gradle" -o -name "build.gradle.kts" \
+              -not -path "*/.git/*" \
+              -printf '%h\n' | head -n 1)
           fi
 
-      - name: Encontrar proyecto NeoForge
-        shell: bash
-        run: |
-          set -
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: No se encontró build.gradle ni build.gradle.kts"
+            find "$GITHUB_WORKSPACE" -maxdepth
