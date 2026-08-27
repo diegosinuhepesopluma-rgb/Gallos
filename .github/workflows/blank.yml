@@ -3,63 +3,48 @@ name: Generar JAR NeoForge 1.21.1
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
-
-permissions:
-  contents: read
+    branches:
+      - main
 
 jobs:
   build:
-    name: Generar JAR
     runs-on: ubuntu-latest
 
     steps:
-      - name: Descargar repositorio
+      - name: Descargar proyecto
         uses: actions/checkout@v4
 
-      - name: Configurar Java 21
+      - name: Java 21
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.12.1'
-
-      - name: Verificar proyecto NeoForge
+      - name: Preparar proyecto
         shell: bash
         run: |
-          set -euo pipefail
-          echo '=== GALLOGIRO NEOFORGE 1.21.1 ==='
-          echo "Directorio: $(pwd)"
-          test -f build.gradle
-          test -f settings.gradle
-          test -f gradle.properties
-          test -d src/main/java
-          test -d src/main/resources
-          echo 'Proyecto Gradle encontrado correctamente en la raíz.'
+          set -e
 
-      - name: Compilar JAR NeoForge 1.21.1
-        shell: bash
-        run: |
-          set -euo pipefail
-          gradle --no-daemon clean build --stacktrace
+          echo "=== BUSCANDO PROYECTO GALLOGIRO ==="
 
-      - name: Verificar JAR generado
-        shell: bash
-        run: |
-          set -euo pipefail
-          find build/libs -maxdepth 1 -type f -name '*.jar' -print
-          JAR="$(find build/libs -maxdepth 1 -type f -name '*.jar' -print -quit)"
-          test -n "$JAR"
-          echo "JAR: $JAR"
+          # Si hay un ZIP del proyecto, descomprimirlo
+          for ZIP in *.zip; do
+            if [ -f "$ZIP" ]; then
+              echo "Descomprimiendo: $ZIP"
+              mkdir -p proyecto
+              unzip -o "$ZIP" -d proyecto
+            fi
+          done
 
-      - name: Entregar JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: GalloGiro-NeoForge-1.21.1
-          path: build/libs/*.jar
-          if-no-files-found: error
-          retention-days: 30
+          # Buscar build.gradle
+          BUILD=$(find . -type f -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
+
+          if [ -z "$BUILD" ]; then
+            echo "ERROR: No se encontró build.gradle."
+            find . -maxdepth 4 -type f | head -100
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$BUILD")
+
+         
