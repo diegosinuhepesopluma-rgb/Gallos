@@ -1,7 +1,7 @@
-name: Generar JAR
+name: Generar JAR GalloGiro NeoForge 1.21.1
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Ejecución manual
   push:
     branches:
       - main
@@ -9,67 +9,59 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - name: Descargar proyecto
+      - name: 📥 Obtener código fuente
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Java 21
+      - name: ☕ Configurar Java 21 (Temurin)
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
+          cache: 'gradle' # Acelera dependencias
 
-      - name: Buscar ZIP
-        run: |
-          echo "Buscando ZIP..."
-          find . -type f -name "*.zip"
-
-      - name: Descomprimir ZIP
-        run: |
-          ZIP=$(find . -type f -name "*.zip" | head -n 1)
-          echo "ZIP encontrado: $ZIP"
-          mkdir -p proyecto
-          unzip -o "$ZIP" -d proyecto
-
-      - name: Buscar Gradle
-        run: |
-          echo "Buscando build.gradle..."
-          find proyecto -type f -name "build.gradle" -print
-          find proyecto -type f -name "build.gradle.kts" -print
-
-      - name: Instalar Gradle
+      - name: 🧩 Configurar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.14'
+          gradle-version: '8.14' # Compatible con NeoForge 1.21.1
 
-      - name: Compilar JAR
+      # ELIMINADO: Búsqueda/descompresión ZIP → innecesario y causa rutas rotas
+      # Trabajamos directamente en el directorio raíz del proyecto
+
+      - name: 🔨 Compilar mod con Gradle
         run: |
-          BUILD=$(find proyecto -type f -name "build.gradle" | head -n 1)
+          chmod +x gradlew # Permisos de ejecución
+          ./gradlew build --no-daemon --stacktrace
+        # --stacktrace te dirá exactamente dónde falla si pasa algo
 
-          if [ -z "$BUILD" ]; then
-            BUILD=$(find proyecto -type f -name "build.gradle.kts" | head -n 1)
-          fi
+      - name: 📂 Buscar y copiar JAR final
+        id: extraer_jar
+        run: |
+          set -e
+          mkdir -p artefacto
 
-          if [ -z "$BUILD" ]; then
-            echo "ERROR: No hay build.gradle en el ZIP"
+          # Busca JAR en la ubicación estándar de NeoForge: build/libs/
+          JAR=$(find ./build/libs -maxdepth 2 -type f -name "*.jar" \
+            ! -name "*-sources.jar" ! -name "*-javadoc.jar" ! -name "*-dev.jar" | head -n 1)
+
+          if [ -z "$JAR" ]; then
+            echo "❌ ERROR: No se encontró el archivo JAR compilado."
+            ls -R build/ || true
             exit 1
           fi
 
-          CARPETA=$(dirname "$BUILD")
-          cd "$CARPETA"
+          cp "$JAR" artefacto/
+          echo "jar_path=$JAR" >> "$GITHUB_OUTPUT"
+          echo "✅ Encontrado: $JAR"
 
-          gradle build --no-daemon
-
-      - name: Buscar JAR
-        run: |
-          mkdir -p resultado
-          find proyecto -type f -path "*/build/libs/*.jar" -exec cp {} resultado/ \;
-          ls -lh resultado
-
-      - name: Entregar JAR
+      - name: 📤 Subir JAR como artefacto
         uses: actions/upload-artifact@v4
         with:
           name: GalloGiro-NeoForge-1.21.1
-          path: resultado/*.jar
+          path: artefacto/*.jar
           if-no-files-found: error
+          retention-days: 30
