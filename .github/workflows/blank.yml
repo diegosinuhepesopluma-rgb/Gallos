@@ -1,10 +1,13 @@
 name: Compilar y generar JAR
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -19,120 +22,103 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
-
-      - name: Buscar ZIP del proyecto
-        shell: bash
-        run: |
-          set -e
-
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No se encontró ningún ZIP"
-            exit 1
-          fi
-
-          echo "ZIP encontrado: $ZIP_FILE"
-
-          rm -rf project
-          mkdir project
-
-          unzip -q "$ZIP_FILE" -d project
-
-          echo "Contenido:"
-          find project -maxdepth 3 -type f | head -100
 
       - name: Encontrar proyecto NeoForge
         shell: bash
         run: |
           set -e
 
-          PROJECT_DIR=$(find "$GITHUB_WORKSPACE/project" -type f -name "build.gradle*" -print -quit | xargs -r dirname)
+          echo "Buscando proyecto NeoForge..."
 
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: No se encontró build.gradle dentro del ZIP"
-            find "$GITHUB_WORKSPACE/project" -maxdepth 5 -type f
-            exit 1
+          if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+            PROJECT_DIR="$GITHUB_WORKSPACE"
+          else
+            ZIP_FILE=$(find "$GITHUB_WORKSPACE" -maxdepth 2 -type f -name '*.zip' -print -quit)
+
+            if [ -z "$ZIP_FILE" ]; then
+              echo "ERROR: No se encontró build.gradle ni un ZIP del proyecto."
+              find "$GITHUB_WORKSPACE" -maxdepth 3 -type f -print
+              exit 1
+            fi
+
+            echo "ZIP encontrado: $ZIP_FILE"
+
+            rm -rf "$GITHUB_WORKSPACE/project"
+            mkdir -p "$GITHUB_WORKSPACE/project"
+
+            unzip -q "$ZIP_FILE" -d "$GITHUB_WORKSPACE/project"
+
+            PROJECT_DIR=$(find "$GITHUB_WORKSPACE/project" \
+              -type f \( -name 'build.gradle' -o -name 'build.gradle.kts' \) \
+              -print -quit | xargs -r dirname)
+
+            if [ -z "$PROJECT_DIR" ]; then
+              echo "ERROR: El ZIP no contiene build.gradle ni build.gradle.kts."
+              find "$GITHUB_WORKSPACE/project" -maxdepth 5 -type f -print
+              exit 1
+            fi
           fi
 
-          echo "Proyecto encontrado en:"
-          echo "$PROJECT_DIR"
-
+          echo "Proyecto encontrado en: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Comprobar proyecto
         shell: bash
         run: |
           set -e
-
           cd "$PROJECT_DIR"
 
           echo "=============================="
           echo "PROYECTO GALLO GIRO"
           echo "=============================="
 
-          echo "Directorio:"
           pwd
 
-          echo ""
-          echo "Archivos:"
+          echo "Archivos principales:"
           ls -la
 
-          if [ ! -f "build.gradle" ] && [ ! -f "build.gradle.kts" ]; then
-            echo "ERROR: No existe build.gradle"
-            exit 1
-          fi
+          test -f build.gradle || test -f build.gradle.kts
 
-          echo "Proyecto Gradle encontrado correctamente."
+          echo "build.gradle encontrado correctamente."
 
       - name: Preparar Gradle
-        shell: bash
-        run: |
-          set -e
-
-          cd "$PROJECT_DIR"
-
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-          else
-            echo "ERROR: No existe gradlew"
-            exit 1
-          fi
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.12.1'
 
       - name: Compilar NeoForge
         shell: bash
         run: |
           set -e
-
           cd "$PROJECT_DIR"
 
           echo "=============================="
-          echo "COMPILANDO NEFORGE"
+          echo "COMPILANDO NEFORGE 1.21.1"
           echo "=============================="
 
-          ./gradlew build --no-daemon --stacktrace
+          gradle clean build --no-daemon --stacktrace
 
       - name: Buscar JAR
         shell: bash
         run: |
           set -e
+          cd "$PROJECT_DIR"
 
-          echo "=============================="
-          echo "BUSCANDO JAR"
-          echo "=============================="
-
-          JAR_FILE=$(find "$PROJECT_DIR/build/libs" -type f -name "*.jar" ! -name "*-sources.jar" | head -n 1)
+          JAR_FILE=$(find build/libs \
+            -maxdepth 1 \
+            -type f \
+            -name '*.jar' \
+            ! -name '*-sources.jar' \
+            ! -name '*-javadoc.jar' \
+            -print -quit)
 
           if [ -z "$JAR_FILE" ]; then
-            echo "ERROR: No se encontró ningún JAR"
-            find "$PROJECT_DIR/build" -type f
+            echo "ERROR: No se encontró ningún JAR."
+            find build -type f -name '*.jar' -print || true
             exit 1
           fi
 
-          echo "JAR encontrado:"
-          echo "$JAR_FILE"
-
+          echo "JAR generado: $JAR_FILE"
           echo "JAR_FILE=$JAR_FILE" >> "$GITHUB_ENV"
 
       - name: Subir JAR
