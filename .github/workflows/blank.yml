@@ -1,10 +1,8 @@
-name: GalloGiro 1.21.1
+name: Compilar JAR
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
 
 jobs:
   build:
@@ -20,25 +18,21 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Instalar Gradle 8.12.1
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.12.1'
-
       - name: Descomprimir ZIP
         shell: bash
         run: |
           set -e
 
-          ZIP=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
+          ZIP=$(find . -maxdepth 2 -type f -iname "*.zip" | head -n 1)
 
           if [ -z "$ZIP" ]; then
-            echo "ERROR: No se encontró el ZIP"
+            echo "No se encontró ningún ZIP"
             exit 1
           fi
 
-          rm -rf proyecto
-          mkdir proyecto
+          echo "ZIP encontrado: $ZIP"
+
+          mkdir -p proyecto
           unzip -o "$ZIP" -d proyecto
 
       - name: Encontrar proyecto NeoForge
@@ -46,37 +40,6 @@ jobs:
         run: |
           set -e
 
-          BUILD=$(find proyecto -type f -name "build.gradle" -print -quit)
-
-          if [ -z "$BUILD" ]; then
-            echo "ERROR: No se encontró build.gradle"
-            find proyecto -type f
-            exit 1
-          fi
-
-          DIR=$(dirname "$BUILD")
-
-          echo "Proyecto encontrado:"
-          echo "$DIR"
-
-          echo "DIR=$DIR" >> "$GITHUB_ENV"
-
-      - name: Compilar JAR
-        shell: bash
-        run: |
-          set -e
-          cd "$DIR"
-
-          echo "=============================="
-          echo "COMPILANDO GALLOGIRO"
-          echo "NEOFORGE 1.21.1"
-          echo "=============================="
-
-          gradle clean build --no-daemon
-
-      - name: Entregar JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: GalloGiro-NeoForge-1.21.1
-          path: ${{ env.DIR }}/build/libs/*.jar
-          if-no-files-found: error
+          DIR=$(find "$GITHUB_WORKSPACE/proyecto" \
+            -type f -name "build.gradle" \
+            -not -path "*/build/*"
