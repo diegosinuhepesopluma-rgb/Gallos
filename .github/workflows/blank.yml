@@ -11,43 +11,95 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
       - name: Configurar Java 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: gradle
+          java-version: "21"
+          distribution: "temurin"
 
-      - name: Buscar proyecto
+      - name: Instalar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14"
+
+      - name: Mostrar archivos del repositorio
+        shell: bash
+        run: |
+          echo "================================"
+          echo "ARCHIVOS DEL REPOSITORIO"
+          echo "================================"
+
+          find . -maxdepth 5 -type f \
+            ! -path "./.git/*" \
+            -print
+
+      - name: Buscar y descomprimir proyecto
         shell: bash
         run: |
           set -e
 
-          echo "Contenido del repositorio:"
-          find . -maxdepth 4 -type f \
-            ! -path './.git/*' \
+          echo "Buscando ZIP del proyecto..."
+
+          ZIP_FILE=""
+
+          while IFS= read -r file; do
+            if [ -n "$file" ]; then
+              ZIP_FILE="$file"
+              break
+            fi
+          done < <(
+            find . \
+              -type f \
+              \( -iname "*.zip" \) \
+              ! -path "./.git/*" \
+              -print
+          )
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "No se encontró ningún ZIP."
+            echo "Sube el ZIP completo del proyecto NeoForge al repositorio."
+            exit 1
+          fi
+
+          echo "ZIP encontrado:"
+          echo "$ZIP_FILE"
+
+          mkdir -p proyecto
+
+          unzip -o "$ZIP_FILE" -d proyecto
+
+          echo "Proyecto descomprimido."
+
+          echo "Archivos Gradle encontrados:"
+
+          find proyecto \
+            -type f \
+            \( -name "build.gradle" -o -name "build.gradle.kts" \) \
             -print
+
+      - name: Encontrar proyecto Gradle
+        shell: bash
+        run: |
+          set -e
 
           PROJECT_DIR=""
 
-          # Buscar build.gradle
           while IFS= read -r file; do
             if [ -n "$file" ]; then
               PROJECT_DIR="$(dirname "$file")"
               break
             fi
           done < <(
-            find . \
+            find proyecto \
               -type f \
               -name "build.gradle" \
-              ! -path "./.git/*" \
               -print
           )
 
-          # Buscar build.gradle.kts si no existe build.gradle
           if [ -z "$PROJECT_DIR" ]; then
             while IFS= read -r file; do
               if [ -n "$file" ]; then
@@ -55,33 +107,25 @@ jobs:
                 break
               fi
             done < <(
-              find . \
+              find proyecto \
                 -type f \
                 -name "build.gradle.kts" \
-                ! -path "./.git/*" \
                 -print
             )
           fi
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: No se encontró build.gradle ni build.gradle.kts."
-            echo "El proyecto NeoForge debe contener los archivos Gradle."
+            echo "ERROR: El ZIP no contiene build.gradle."
+            echo ""
+            echo "Contenido del ZIP:"
+            find proyecto -maxdepth 6 -type f -print
             exit 1
           fi
 
-          PROJECT_DIR="${PROJECT_DIR#./}"
+          echo "Proyecto Gradle encontrado:"
+          echo "$PROJECT_DIR"
 
-          if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "." ]; then
-            PROJECT_DIR="."
-          fi
-
-          echo "Proyecto encontrado en: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-      - name: Instalar Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.14'
 
       - name: Preparar Gradle
         shell: bash
@@ -92,10 +136,10 @@ jobs:
 
           if [ -f "./gradlew" ]; then
             chmod +x ./gradlew
-            echo "Se encontró gradlew."
+            echo "Usando Gradle Wrapper."
           else
             echo "No existe gradlew."
-            echo "Se utilizará Gradle instalado."
+            echo "Se usará Gradle 8.14."
           fi
 
       - name: Compilar NeoForge
@@ -104,6 +148,10 @@ jobs:
           set -e
 
           cd "$PROJECT_DIR"
+
+          echo "================================"
+          echo "COMPILANDO GALLOGIRO"
+          echo "================================"
 
           if [ -f "./gradlew" ]; then
             ./gradlew clean build --no-daemon --stacktrace
@@ -116,7 +164,9 @@ jobs:
         run: |
           set -e
 
-          echo "Buscando archivos JAR..."
+          echo "================================"
+          echo "BUSCANDO JAR"
+          echo "================================"
 
           find "$PROJECT_DIR" \
             -type f \
@@ -127,5 +177,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: GalloGiro-NeoForge-1.21.1
-          path: '**/build/libs/*.jar'
+          path: "**/build/libs/*.jar"
           if-no-files-found: error
