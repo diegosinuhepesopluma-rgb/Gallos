@@ -19,14 +19,13 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: gradle
 
       - name: Buscar ZIP del mod
         shell: bash
         run: |
           set -e
 
-          echo "=== BUSCANDO ZIP ==="
+          echo "=== BUSCANDO ZIP DEL MOD ==="
 
           ZIP=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
 
@@ -42,10 +41,10 @@ jobs:
 
           unzip -o "$ZIP" -d proyecto
 
-          echo "=== CONTENIDO ==="
-          find proyecto -maxdepth 3 -type f | head -100
+          echo "=== ARCHIVOS EXTRAÍDOS ==="
+          find proyecto -maxdepth 4 -type f
 
-      - name: Encontrar carpeta del proyecto
+      - name: Encontrar proyecto NeoForge
         shell: bash
         run: |
           set -e
@@ -56,13 +55,16 @@ jobs:
 
           if [ -z "$BUILD" ]; then
             echo "ERROR: No se encontró build.gradle"
-            find proyecto -maxdepth 5 -type f
+            echo "Contenido del ZIP:"
+            find proyecto -maxdepth 6 -type f
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$BUILD")
 
-          echo "Proyecto encontrado en: $PROJECT_DIR"
+          echo "Proyecto encontrado:"
+          echo "$PROJECT_DIR"
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Configurar Gradle
@@ -87,11 +89,17 @@ jobs:
         run: |
           set -e
 
-          echo "=== JAR GENERADO ==="
+          echo "=== BUSCANDO JAR ==="
 
-          find "$PROJECT_DIR/build/libs" -type f -name "*.jar" -print
+          find "$PROJECT_DIR/build/libs" \
+            -type f \
+            -name "*.jar" \
+            -print
 
-          if ! find "$PROJECT_DIR/build/libs" -type f -name "*.jar" | grep -q .; then
+          if ! find "$PROJECT_DIR/build/libs" \
+            -type f \
+            -name "*.jar" | grep -q .; then
+
             echo "ERROR: No se generó ningún JAR"
             exit 1
           fi
