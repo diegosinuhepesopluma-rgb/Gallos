@@ -1,280 +1,67 @@
-package com.diegomarcelo.gallogiro.entity;
+name: Build GalloGiro NeoForge 1.21.1
 
-import com.diegomarcelo.gallogiro.registry.ModSounds;
-import net.minecraft.sounds.SoundEvent;
-import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.PathfinderMob;
-import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
-import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.ai.goal.FloatGoal;
-import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
-import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
-import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
-import net.minecraft.world.entity.ai.goal.RandomStrollGoal;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
 
-import java.util.Comparator;
-import java.util.EnumSet;
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-import org.jetbrains.annotations.Nullable;
+    steps:
 
-import software.bernie.geckolib.animatable.GeoEntity;
-import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.animation.AnimatableManager;
-import software.bernie.geckolib.animation.AnimationController;
-import software.bernie.geckolib.animation.PlayState;
-import software.bernie.geckolib.animation.RawAnimation;
-import software.bernie.geckolib.util.GeckoLibUtil;
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
 
-public class GalloEntity extends PathfinderMob implements GeoEntity {
+      - name: Configurar Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
 
-    private static final RawAnimation ANIM_COMER =
-            RawAnimation.begin().thenPlay("animation.gallo.comer");
+      - name: Buscar ZIP del proyecto
+        shell: bash
+        run: |
+          set -e
 
-    private static final RawAnimation ANIM_PELEA =
-            RawAnimation.begin().thenPlay("animation.gallo.pelea_patada");
+          echo "Buscando ZIP..."
 
-    private final AnimatableInstanceCache cache =
-            GeckoLibUtil.createInstanceCache(this);
+          ZIP_FILE=$(find . -maxdepth 3 -type f -iname "*.zip" | head -n 1)
 
-    private boolean attackingAnimation = false;
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No se encontró ningún ZIP."
+            exit 1
+          fi
 
-    public GalloEntity(EntityType<? extends PathfinderMob> type, Level level) {
-        super(type, level);
-        this.xpReward = 3;
-    }
+          echo "ZIP encontrado: $ZIP_FILE"
 
-    public static AttributeSupplier.Builder createAttributes() {
-        return PathfinderMob.createMobAttributes()
-                .add(Attributes.MAX_HEALTH, 10.0D)
-                .add(Attributes.MOVEMENT_SPEED, 0.28D)
-                .add(Attributes.ATTACK_DAMAGE, 2.0D)
-                .add(Attributes.FOLLOW_RANGE, 16.0D)
-                .add(Attributes.KNOCKBACK_RESISTANCE, 0.1D);
-    }
+          mkdir -p proyecto
 
-    @Override
-    protected void registerGoals() {
+          unzip -o "$ZIP_FILE" -d proyecto
 
-        this.goalSelector.addGoal(0, new FloatGoal(this));
+          echo "Contenido:"
+          find proyecto -maxdepth 4 -type f | head -100
 
-        // Buscar otro gallo y pelear automáticamente
-        this.goalSelector.addGoal(1, new GalloTargetGoal(this));
+      - name: Encontrar proyecto NeoForge
+        shell: bash
+        run: |
+          set -e
 
-        // Ataque cuerpo a cuerpo
-        this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.15D, true) {
+          PROJECT_DIR=$(find proyecto -type f \
+            -name "build.gradle" -o -name "build.gradle.kts" \
+            -print -quit | xargs -r dirname)
 
-            @Override
-            protected void checkAndPerformAttack(
-                    LivingEntity target,
-                    double distanceSq) {
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: No se encontró build.gradle."
+            echo "Archivos encontrados:"
+            find proyecto -type f | head -200
+            exit 1
+          fi
 
-                double reach = this.getAttackReachSqr(target);
+          echo "Proyecto encontrado en:"
+          echo "$PROJECT_DIR"
 
-                if (distanceSq <= reach
-                        && this.getTicksUntilNextAttack() <= 0) {
-
-                    GalloEntity.this.attackingAnimation = true;
-
-                    GalloEntity.this.triggerAnim(
-                            "combat",
-                            "kick"
-                    );
-
-                    super.checkAndPerformAttack(target, distanceSq);
-                }
-            }
-        });
-
-        this.goalSelector.addGoal(
-                7,
-                new RandomStrollGoal(this, 0.8D)
-        );
-
-        this.goalSelector.addGoal(
-                8,
-                new LookAtPlayerGoal(
-                        this,
-                        Player.class,
-                        8.0F
-                )
-        );
-
-        this.goalSelector.addGoal(
-                9,
-                new RandomLookAroundGoal(this)
-        );
-    }
-
-    /**
-     * Hace que un gallo busque al gallo más cercano
-     * y empiece a pelear automáticamente.
-     */
-    private static final class GalloTargetGoal extends Goal {
-
-        private final GalloEntity gallo;
-
-        private GalloEntity target;
-
-        private GalloTargetGoal(GalloEntity gallo) {
-            this.gallo = gallo;
-
-            this.setFlags(
-                    EnumSet.of(Flag.TARGET)
-            );
-        }
-
-        @Override
-        public boolean canUse() {
-
-            if (gallo.getTarget() != null
-                    && gallo.getTarget().isAlive()) {
-                return false;
-            }
-
-            target = gallo.level().getEntitiesOfClass(
-                    GalloEntity.class,
-                    gallo.getBoundingBox().inflate(16.0D),
-                    other ->
-                            other != gallo
-                            && other.isAlive()
-            )
-            .stream()
-            .min(
-                    Comparator.comparingDouble(
-                            gallo::distanceToSqr
-                    )
-            )
-            .orElse(null);
-
-            return target != null;
-        }
-
-        @Override
-        public boolean canContinueToUse() {
-
-            return gallo.getTarget() instanceof GalloEntity target
-                    && target.isAlive()
-                    && gallo.distanceToSqr(target)
-                    <= 20.0D * 20.0D;
-        }
-
-        @Override
-        public void start() {
-            gallo.setTarget(target);
-        }
-
-        @Override
-        public void stop() {
-
-            if (gallo.getTarget() instanceof GalloEntity) {
-                gallo.setTarget(null);
-            }
-
-            target = null;
-        }
-    }
-
-    /**
-     * Animaciones GeckoLib.
-     */
-    @Override
-    public void registerControllers(
-            AnimatableManager.ControllerRegistrar controllers) {
-
-        controllers.add(
-                new AnimationController<>(
-                        this,
-                        "main",
-                        5,
-                        state -> {
-
-                            if (this.attackingAnimation) {
-
-                                state.setAndContinue(
-                                        ANIM_PELEA
-                                );
-
-                                this.attackingAnimation = false;
-
-                            } else if (this.isCrouching()) {
-
-                                state.setAndContinue(
-                                        ANIM_COMER
-                                );
-
-                            } else {
-
-                                state.getController()
-                                        .setAnimation(
-                                                RawAnimation.begin()
-                                                        .thenLoop(
-                                                                "animation.gallo.idle"
-                                                        )
-                                        );
-                            }
-
-                            return PlayState.CONTINUE;
-                        }
-                )
-        );
-
-        controllers.add(
-                new AnimationController<>(
-                        this,
-                        "combat",
-                        0,
-                        state -> PlayState.STOP
-                )
-                .triggerableAnim(
-                        "kick",
-                        ANIM_PELEA
-                )
-        );
-    }
-
-    @Override
-    protected @Nullable SoundEvent getAmbientSound() {
-        return ModSounds.KIKIRIKI.get();
-    }
-
-    @Override
-    protected int getAmbientSoundInterval() {
-        return 20 * 20;
-    }
-
-    @Override
-    protected SoundEvent getHurtSound(
-            DamageSource source) {
-
-        return ModSounds.KIKIRIKI.get();
-    }
-
-    @Override
-    protected SoundEvent getDeathSound() {
-        return ModSounds.KIKIRIKI.get();
-    }
-
-    /**
-     * Caché de animaciones GeckoLib.
-     */
-    @Override
-    public AnimatableInstanceCache getAnimatableInstanceCache() {
-        return cache;
-    }
-
-    @Override
-    public void triggerAnim(
-            String controllerName,
-            String animName) {
-
-        GeoEntity.super.triggerAnim(
-                controllerName,
-                animName
-        );
-    }
-}
+          echo "PROJECT_DIR=$PROJECT_DIR
